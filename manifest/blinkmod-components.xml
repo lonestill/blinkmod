@@ -1,0 +1,15 @@
+<!-- Insert inside <application> of the locally decoded Blink manifest. -->
+<activity android:exported="false" android:label="BlinkMod" android:name="com.blinkmap.mod.ModSettingsActivity" android:theme="@android:style/Theme.Material.NoActionBar" />
+<activity android:exported="true" android:label="Выбор друга" android:name="com.blinkmap.mod.FriendWidgetConfigActivity" android:theme="@android:style/Theme.Material.NoActionBar" />
+<receiver android:exported="false" android:label="Друг на карте" android:name="com.blinkmap.mod.FriendWidgetProvider">
+    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="app.blinkmod.WIDGET_REFRESH" /></intent-filter>
+    <meta-data android:name="android.appwidget.provider" android:resource="@xml/blinkmod_friend_widget_info" />
+</receiver>
+<receiver android:exported="false" android:label="Друг — компактный" android:name="com.blinkmap.mod.CompactFriendWidgetProvider">
+    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="app.blinkmod.WIDGET_COMPACT_REFRESH" /></intent-filter>
+    <meta-data android:name="android.appwidget.provider" android:resource="@xml/blinkmod_friend_widget_compact_info" />
+</receiver>
+<receiver android:exported="false" android:label="Кто рядом — радар" android:name="com.blinkmap.mod.NearbyRadarWidgetProvider">
+    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="app.blinkmod.WIDGET_RADAR_REFRESH" /></intent-filter>
+    <meta-data android:name="android.appwidget.provider" android:resource="@xml/blinkmod_nearby_widget_info" />
+</receiver>
