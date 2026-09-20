@@ -17,7 +17,25 @@ public final class StepHooks {
     public static volatile int geoRateLimitHits;
     public static volatile int locationPrecision;
     public static volatile int locationPrecisionHits;
+    public static volatile double customLat;
+    public static volatile double customLon;
+    public static volatile double driftCurLat;
+    public static volatile double driftCurLon;
     private StepHooks() {}
+
+    public static void setCustomLocation(double lat, double lon) {
+        customLat = lat;
+        customLon = lon;
+        driftCurLat = lat;
+        driftCurLon = lon;
+        SharedPreferences p = prefs();
+        if (p != null) {
+            p.edit()
+                .putLong("custom_lat_bits", Double.doubleToRawLongBits(lat))
+                .putLong("custom_lon_bits", Double.doubleToRawLongBits(lon))
+                .apply();
+        }
+    }
 
     public static void init(Context context) {
         if (context != null) {
@@ -29,6 +47,7 @@ public final class StepHooks {
             pauseUntil = p == null ? 0L : p.getLong("pause_until", 0L);
             geoIntervalMs = p == null ? 0L : p.getInt("geo_interval_minutes", 0) * 60000L;
             locationPrecision = p == null ? 0 : p.getInt("location_precision", 0);
+            BadgeManager.init(context);
         }
     }
 
