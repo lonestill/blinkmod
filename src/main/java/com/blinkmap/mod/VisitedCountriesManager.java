@@ -818,75 +818,58 @@ public final class VisitedCountriesManager {
         new Thread(new Runnable() {
             @Override
             public void run() {
+                init(ctx);
+                boolean cacheOk = scanCacheDirectory(ctx);
                 String token = getAuthToken(ctx);
-                boolean success = false;
+                boolean apiSuccess = false;
                 String errorMsg = null;
 
                 if (token != null && !token.isEmpty()) {
                     try {
-                        String[] endpoints = new String[] {
-                            "https://api.blink-maps.com/api/footprints/stats/world",
-                            "https://api.blink-maps.com/api/footprints/countries"
-                        };
+                        String ep = "https://api.blink-maps.com/api/footprints/countries";
+                        HttpURLConnection conn = null;
+                        try {
+                            URL u = new URL(ep);
+                            conn = (HttpURLConnection) u.openConnection();
+                            conn.setRequestMethod("GET");
+                            conn.setConnectTimeout(2000);
+                            conn.setReadTimeout(3000);
+                            conn.setRequestProperty("Authorization", token);
+                            conn.setRequestProperty("Accept", "application/json");
+                            conn.setRequestProperty("User-Agent", "Blink/1.32.0 (Android)");
 
-                        for (String ep : endpoints) {
-                            HttpURLConnection conn = null;
-                            try {
-                                URL u = new URL(ep);
-                                conn = (HttpURLConnection) u.openConnection();
-                                conn.setRequestMethod("GET");
-                                conn.setConnectTimeout(10000);
-                                conn.setReadTimeout(15000);
-                                conn.setRequestProperty("Authorization", token);
-                                conn.setRequestProperty("Accept", "application/json");
-                                conn.setRequestProperty("User-Agent", "Blink/1.32.0 (Android)");
-
-                                int code = conn.getResponseCode();
-                                if (code >= 200 && code < 300) {
-                                    InputStream is = conn.getInputStream();
-                                    BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
-                                    StringBuilder sb = new StringBuilder();
-                                    String line;
-                                    while ((line = reader.readLine()) != null) {
-                                        sb.append(line);
-                                    }
-                                    reader.close();
-                                    success = parseAndSaveFootprints(ctx, sb.toString(), "Прямой API (" + (ep.contains("stats") ? "stats/world" : "countries") + ")");
-                                    if (success) break;
-                                } else {
-                                    errorMsg = "HTTP " + code + " (" + ep + ")";
+                            int code = conn.getResponseCode();
+                            if (code >= 200 && code < 300) {
+                                InputStream is = conn.getInputStream();
+                                BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+                                StringBuilder sb = new StringBuilder();
+                                String line;
+                                while ((line = reader.readLine()) != null) {
+                                    sb.append(line);
                                 }
-                            } finally {
-                                if (conn != null) conn.disconnect();
+                                reader.close();
+                                apiSuccess = parseAndSaveFootprints(ctx, sb.toString(), "Прямой API");
                             }
+                        } finally {
+                            if (conn != null) conn.disconnect();
                         }
                     } catch (Throwable e) {
-                        errorMsg = "Сетевая ошибка: " + e.getMessage();
-                        Log.e(TAG, "Sync from server failed", e);
+                        errorMsg = e.getMessage();
                     }
                 }
 
-                if (!success) {
-                    boolean cacheOk = scanCacheDirectory(ctx);
-                    if (cacheOk) {
-                        success = true;
-                    } else if (errorMsg == null) {
-                        errorMsg = "Токен авторизации ещё не сохранён. Откройте карту или профиль в Blink.";
-                    }
-                }
-
-                final boolean finalSuccess = success;
-                final String finalError = errorMsg;
                 final CountryStats stats = getStats(ctx);
+                final boolean success = apiSuccess || cacheOk || (stats != null && stats.visitedCount > 0);
+                final String finalError = errorMsg;
 
                 handler.post(new Runnable() {
                     @Override
                     public void run() {
                         if (callback != null) {
-                            if (finalSuccess) {
+                            if (success) {
                                 callback.onSuccess(stats);
                             } else {
-                                callback.onError(finalError != null ? finalError : "Не удалось получить данные о странах");
+                                callback.onError(finalError != null ? finalError : "Откройте вкладку «Мой мир» на карте для автосинхронизации");
                             }
                         }
                     }
