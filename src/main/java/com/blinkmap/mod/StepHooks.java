@@ -21,6 +21,15 @@ public final class StepHooks {
     public static volatile double customLon;
     public static volatile double driftCurLat;
     public static volatile double driftCurLon;
+    public static volatile Object lastLocationCallback;
+    public static volatile long lastRealLocationTime;
+    public static volatile double driftAngle;
+    public static volatile float driftBearing;
+    public static volatile float driftSpeed = 1.25f;
+    public static volatile int driftMode = 0;
+    public static volatile int driftHits = 0;
+    public static volatile int driftStepsAdded = 0;
+    public static volatile long driftLastTime = 0;
     private StepHooks() {}
 
     public static void setCustomLocation(double lat, double lon) {
@@ -37,6 +46,66 @@ public final class StepHooks {
         }
     }
 
+    public static double getDriftLat(double original) {
+        if (driftCurLat != 0.0) return driftCurLat;
+        if (customLat != 0.0) return customLat;
+        return original;
+    }
+
+    public static double getDriftLon(double original) {
+        if (driftCurLon != 0.0) return driftCurLon;
+        if (customLon != 0.0) return customLon;
+        return original;
+    }
+
+    public static float getDriftSpeed(float original) {
+        if (customLat != 0.0 || driftCurLat != 0.0) {
+            return driftSpeed > 0 ? driftSpeed : 1.25f;
+        }
+        return original;
+    }
+
+    public static float getDriftBearing(float original) {
+        if (customLat != 0.0 || driftCurLat != 0.0) {
+            return driftBearing;
+        }
+        return original;
+    }
+
+    public static void updateLocation(double lat, double lon) {
+    }
+
+    public static void hookLocation(android.location.Location location) {
+        if (location == null) return;
+        double lat = location.getLatitude();
+        double lon = location.getLongitude();
+        updateLocation(lat, lon);
+        location.setLatitude(getDriftLat(lat));
+        location.setLongitude(getDriftLon(lon));
+        location.setSpeed(getDriftSpeed(location.getSpeed()));
+    }
+
+    public static void dispatchSyntheticLocation() {
+        Object callback = lastLocationCallback;
+        if (callback == null) return;
+        double lat = getDriftLat(0.0);
+        double lon = getDriftLon(0.0);
+        if (lat == 0.0 && lon == 0.0) return;
+        try {
+            android.location.Location loc = new android.location.Location("fused");
+            loc.setLatitude(lat);
+            loc.setLongitude(lon);
+            loc.setAccuracy(5.0f);
+            loc.setTime(System.currentTimeMillis());
+            loc.setElapsedRealtimeNanos(android.os.SystemClock.elapsedRealtimeNanos());
+            loc.setSpeed(getDriftSpeed(0.0f));
+            loc.setBearing(getDriftBearing(0.0f));
+
+            java.lang.reflect.Method m = callback.getClass().getMethod("fakeDispatch", android.location.Location.class);
+            m.invoke(callback, loc);
+        } catch (Throwable ignored) {}
+    }
+
     public static void init(Context context) {
         if (context != null) {
             app = context.getApplicationContext();
@@ -47,6 +116,14 @@ public final class StepHooks {
             pauseUntil = p == null ? 0L : p.getLong("pause_until", 0L);
             geoIntervalMs = p == null ? 0L : p.getInt("geo_interval_minutes", 0) * 60000L;
             locationPrecision = p == null ? 0 : p.getInt("location_precision", 0);
+            long latBits = p == null ? 0L : p.getLong("custom_lat_bits", 0L);
+            long lonBits = p == null ? 0L : p.getLong("custom_lon_bits", 0L);
+            if (latBits != 0L || lonBits != 0L) {
+                customLat = Double.longBitsToDouble(latBits);
+                customLon = Double.longBitsToDouble(lonBits);
+                driftCurLat = customLat;
+                driftCurLon = customLon;
+            }
             BadgeManager.init(context);
         }
     }

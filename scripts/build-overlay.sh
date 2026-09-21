@@ -2,7 +2,6 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 : "${ANDROID_JAR:?Set ANDROID_JAR to android.jar}"
-: "${ECJ:?Set ECJ to ecj.jar}"
 : "${D8:?Set D8 to the d8 executable}"
 : "${APKTOOL:?Set APKTOOL to apktool.jar}"
 OUT="${OUT:-$ROOT/build}"
@@ -22,7 +21,12 @@ YML
 cat > "$OUT/bridge-project/AndroidManifest.xml" <<XML
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.blinkmod"><uses-sdk android:minSdkVersion="32" /></manifest>
 XML
-java -jar "$ECJ" -source 1.8 -target 1.8 -cp "$ANDROID_JAR" -d "$OUT/classes" $(find "$ROOT/src/main/java" -name '*.java' | sort)
+if [ -n "${ECJ:-}" ] && [ -f "${ECJ:-}" ]; then
+    java -jar "$ECJ" -source 1.8 -target 1.8 -cp "$ANDROID_JAR" -d "$OUT/classes" $(find "$ROOT/src/main/java" -name '*.java' | sort)
+else
+    JAVAC_BIN="${JAVAC:-/opt/homebrew/opt/openjdk@17/bin/javac}"
+    "$JAVAC_BIN" --release 8 -cp "$ANDROID_JAR" -d "$OUT/classes" $(find "$ROOT/src/main/java" -name '*.java' | sort)
+fi
 "$D8" --lib "$ANDROID_JAR" --min-api 32 --output "$OUT/java-dex" $(find "$OUT/classes" -name '*.class' | sort)
 java -jar "$APKTOOL" b "$OUT/bridge-project" -o "$OUT/bridge.apk"
 unzip -p "$OUT/bridge.apk" classes.dex > "$OUT/bridge.dex"
