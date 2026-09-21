@@ -143,18 +143,18 @@ public final class WorldTourUi {
         speedRow.addView(btn25s);
         card.addView(speedRow);
 
-        // Action 0: TOP 1 BOOST - 25 MISSING COUNTRIES (~1.2 min)
-        View btnTop1 = createActionButton(activity, "👑 ВЗЯТЬ ТОП-1 МИРА (25 стран, 3 сек/точка)", Color.rgb(255, 204, 0), new View.OnClickListener() {
+        // Action 0: TOP 1 BOOST - 141 MISSING COUNTRIES (~4.7 min)
+        View btnTop1 = createActionButton(activity, "👑 ВЗЯТЬ ТОП-1 МИРА (141 страна, 2 сек/точка, ~4.7 мин)", Color.rgb(255, 204, 0), new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WorldTour.start(activity, WorldTour.MODE_TOP1_BOOST, 3000L, new Runnable() {
+                WorldTour.start(activity, WorldTour.MODE_TOP1_BOOST, 2000L, new Runnable() {
                     @Override
                     public void run() {
                         mainHandler.post(updateStatus);
                     }
                 });
                 updateStatus.run();
-                Toast.makeText(activity, "Рейд на ТОП-1 мира запущен (3 сек/точка)!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, "Рейд на ТОП-1 мира запущен (141 страна)!", Toast.LENGTH_SHORT).show();
             }
         });
         card.addView(btnTop1);
