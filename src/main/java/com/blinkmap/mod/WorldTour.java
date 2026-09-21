@@ -14,6 +14,8 @@ public final class WorldTour {
     public static final int MODE_CAPITALS = 2;
     public static final int MODE_GLOBE_GRID = 3;
     public static final int MODE_TOP1_BOOST = 4;
+    public static final int MODE_MISSING_ONLY = 5;
+    public static final int MODE_CITIES = MODE_ALL_CITIES;
 
     public static final class City {
         public final String name;
@@ -70,6 +72,7 @@ public final class WorldTour {
         new City("Гонолулу (Гавайи)", 21.3069, -157.8583),
         new City("Нукуалофа (Тонга)", -21.1394, -175.2018)
     };
+    public static final City[] WORLD_CITIES = WORLD_CAPITALS;
 
     public static City[] loadFromAsset(Context context, String assetName, City[] fallback) {
         ArrayList<City> list = new ArrayList<City>();
@@ -140,17 +143,30 @@ public final class WorldTour {
             if (currentIndex > 0 && currentIndex >= totalCount) {
                 return "Турне завершено (" + totalCount + " точек)";
             }
+            if (currentMode == MODE_MISSING_ONLY && totalCount == 0) {
+                return "Все страны уже посещены! Топ-1 взят!";
+            }
             return "Не активно";
         }
         return "В пути: " + currentPlace + " (" + (currentIndex + 1) + "/" + totalCount + ")";
     }
 
     public static synchronized void start(final Context context, final int mode, final long delayMs, final Runnable onProgress) {
+        startInternal(context, mode, null, delayMs, onProgress);
+    }
+
+    public static synchronized void startCustom(final Context context, final City[] customTargets, final long delayMs, final Runnable onProgress) {
+        startInternal(context, MODE_MISSING_ONLY, customTargets, delayMs, onProgress);
+    }
+
+    private static synchronized void startInternal(final Context context, final int mode, final City[] explicitTargets, final long delayMs, final Runnable onProgress) {
         stop();
 
         currentMode = mode;
         final City[] targets;
-        if (mode == MODE_COUNTRIES_ONLY) {
+        if (explicitTargets != null) {
+            targets = explicitTargets;
+        } else if (mode == MODE_COUNTRIES_ONLY) {
             targets = loadFromAsset(context, "world_countries.dat", WORLD_CAPITALS);
         } else if (mode == MODE_ALL_CITIES) {
             targets = loadFromAsset(context, "world_cities.dat", WORLD_CAPITALS);
@@ -158,12 +174,25 @@ public final class WorldTour {
             targets = generateGlobeGrid(15, 20);
         } else if (mode == MODE_TOP1_BOOST) {
             targets = loadFromAsset(context, "top1_boost.dat", WORLD_CAPITALS);
+        } else if (mode == MODE_MISSING_ONLY) {
+            java.util.List<City> missing = VisitedCountriesManager.getMissingCountries(context);
+            targets = missing.isEmpty() ? new City[0] : missing.toArray(new City[0]);
         } else {
             targets = WORLD_CAPITALS;
         }
 
         totalCount = targets.length;
         currentIndex = 0;
+        if (targets.length == 0) {
+            running = false;
+            currentPlace = (mode == MODE_MISSING_ONLY) ? "Все страны уже посещены! Топ-1 взят!" : "Список пуст";
+            if (onProgress != null) {
+                try {
+                    onProgress.run();
+                } catch (Throwable ignored) {}
+            }
+            return;
+        }
         running = true;
 
         runnerThread = new Thread(new Runnable() {
@@ -194,6 +223,7 @@ public final class WorldTour {
                         StepHooks.driftCurLat = city.lat;
                         StepHooks.driftCurLon = city.lon;
                         StepHooks.dispatchSyntheticLocation();
+                        VisitedCountriesManager.markCountryVisited(city.name);
 
                         if (onProgress != null) {
                             try {
@@ -201,16 +231,28 @@ public final class WorldTour {
                             } catch (Throwable ignored) {}
                         }
 
-                        if (mode == MODE_TOP1_BOOST) {
-                            // Dwell 3.2s with 3 pings across the window to cleanly beat conflate()
-                            StepHooks.dispatchSyntheticLocation();
-                            Thread.sleep(1100L);
-                            if (!running) break;
-                            StepHooks.dispatchSyntheticLocation();
-                            Thread.sleep(1100L);
-                            if (!running) break;
-                            StepHooks.dispatchSyntheticLocation();
-                            Thread.sleep(1000L);
+                        if (mode == MODE_TOP1_BOOST || mode == MODE_MISSING_ONLY) {
+                            // 5 human walking steps spaced 2.1s apart (~10.5s total dwell per country)
+                            double curLat = city.lat;
+                            double curLon = city.lon;
+                            float bearing = 35.0f;
+
+                            for (int step = 0; step < 5 && running; step++) {
+                                StepHooks.customLat = curLat;
+                                StepHooks.customLon = curLon;
+                                StepHooks.driftCurLat = curLat;
+                                StepHooks.driftCurLon = curLon;
+                                StepHooks.driftSpeed = 1.25f + (float)(step * 0.05);
+                                StepHooks.driftBearing = bearing;
+                                StepHooks.dispatchSyntheticLocation();
+
+                                Thread.sleep(2100L);
+                                if (!running) break;
+
+                                curLat += 0.000045;
+                                curLon += 0.000035;
+                                bearing = (bearing + 12.0f) % 360.0f;
+                            }
                         } else if (delayMs >= 2000L) {
                             long third = delayMs / 3L;
                             Thread.sleep(third);

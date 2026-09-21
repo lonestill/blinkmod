@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+[ -z "${JAVA_HOME:-}" ] && [ -d "/opt/homebrew/opt/openjdk@17" ] && export JAVA_HOME="/opt/homebrew/opt/openjdk@17"
+[ -n "${JAVA_HOME:-}" ] && export PATH="$JAVA_HOME/bin:$PATH"
+
+ANDROID_JAR="${ANDROID_JAR:-/opt/homebrew/share/android-commandlinetools/platforms/android-35/android.jar}"
+D8="${D8:-/opt/homebrew/share/android-commandlinetools/build-tools/35.0.0/d8}"
+APKTOOL="${APKTOOL:-/Users/a123/Desktop/AI_Agent/blink_from_gitty/blink_mod_menu/android-build-tools/apktool.jar}"
+
 : "${ANDROID_JAR:?Set ANDROID_JAR to android.jar}"
 : "${D8:?Set D8 to the d8 executable}"
 : "${APKTOOL:?Set APKTOOL to apktool.jar}"

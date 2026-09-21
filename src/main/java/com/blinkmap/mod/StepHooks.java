@@ -126,7 +126,34 @@ public final class StepHooks {
                 driftCurLon = customLon;
             }
             BadgeManager.init(context);
+            VisitedCountriesManager.init(context);
+
+            try {
+                android.content.IntentFilter filter = new android.content.IntentFilter();
+                filter.addAction("com.blinkmap.mod.START_TOUR");
+                filter.addAction("com.blinkmap.mod.STOP_TOUR");
+                android.content.BroadcastReceiver receiver = new android.content.BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context c, android.content.Intent intent) {
+                        if (intent == null || intent.getAction() == null) return;
+                        if ("com.blinkmap.mod.START_TOUR".equals(intent.getAction())) {
+                            WorldTour.start(app, WorldTour.MODE_TOP1_BOOST, 1500L, null);
+                        } else if ("com.blinkmap.mod.STOP_TOUR".equals(intent.getAction())) {
+                            WorldTour.stop();
+                        }
+                    }
+                };
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    app.registerReceiver(receiver, filter, 2);
+                } else {
+                    app.registerReceiver(receiver, filter);
+                }
+            } catch (Throwable ignored) {}
         }
+    }
+
+    public static Context getApp() {
+        return app;
     }
 
     public static void setHideCharge(boolean enabled) { hideCharge = enabled; }
@@ -393,7 +420,7 @@ public final class StepHooks {
         if (p != null) p.edit().putString("username_check_state", "Ошибка: " + name).apply();
     }
 
-    private static void log(String message) {
+    public static void log(String message) {
         SharedPreferences p = prefs();
         if (p == null) return;
         String time = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(new java.util.Date());

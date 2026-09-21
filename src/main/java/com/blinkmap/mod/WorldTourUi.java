@@ -1,6 +1,7 @@
 package com.blinkmap.mod;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -9,8 +10,11 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.List;
 
 public final class WorldTourUi {
     private static final int BASE_BG = Color.rgb(22, 22, 28);
@@ -18,6 +22,7 @@ public final class WorldTourUi {
     private static final int DIVIDER = Color.rgb(44, 44, 56);
     private static final int PURPLE = Color.rgb(138, 92, 255);
     private static final int CARD_BG = Color.rgb(32, 32, 40);
+    private static final int GOLD = Color.rgb(255, 204, 0);
 
     private static long currentDelay = 1500L; // default 1.5s for reliable network delivery
 
@@ -60,6 +65,50 @@ public final class WorldTourUi {
         descLp.topMargin = dp(activity, 4);
         card.addView(desc, descLp);
 
+        // --- Visited Countries Stats Box ---
+        final LinearLayout statsBox = new LinearLayout(activity);
+        statsBox.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable statsBg = new GradientDrawable();
+        statsBg.setColor(Color.rgb(24, 24, 30));
+        statsBg.setCornerRadius(dp(activity, 12));
+        statsBox.setBackground(statsBg);
+        int sbPad = dp(activity, 12);
+        statsBox.setPadding(sbPad, sbPad, sbPad, sbPad);
+        LinearLayout.LayoutParams statsBoxLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        statsBoxLp.topMargin = dp(activity, 8);
+        statsBoxLp.bottomMargin = dp(activity, 4);
+        statsBox.setLayoutParams(statsBoxLp);
+
+        final TextView statsMain = new TextView(activity);
+        statsMain.setTextSize(14);
+        statsMain.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        statsBox.addView(statsMain);
+
+        final TextView statsSub = new TextView(activity);
+        statsSub.setTextSize(11);
+        statsSub.setTextColor(SECONDARY);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(activity, 3);
+        statsBox.addView(statsSub, subLp);
+
+        // Sub-buttons inside stats box: Sync & View missing list
+        LinearLayout statsBtns = new LinearLayout(activity);
+        statsBtns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams sbLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sbLp.topMargin = dp(activity, 10);
+        statsBtns.setLayoutParams(sbLp);
+
+        final TextView btnSync = createPillButton(activity, "🔄 Синхронизировать");
+        final TextView btnShowMissing = createPillButton(activity, "📋 Недостающие страны");
+        statsBtns.addView(btnSync);
+        statsBtns.addView(btnShowMissing);
+        statsBox.addView(statsBtns);
+        card.addView(statsBox);
+
+        // --- Current Tour Live Status View ---
         final TextView statusView = new TextView(activity);
         statusView.setText(WorldTour.getStatusText());
         statusView.setTextSize(13);
@@ -71,13 +120,95 @@ public final class WorldTourUi {
         statusLp.bottomMargin = dp(activity, 10);
         card.addView(statusView, statusLp);
 
+        // --- Runnable to update both tour status and country statistics ---
+        final Runnable updateVisitedStats = new Runnable() {
+            @Override
+            public void run() {
+                VisitedCountriesManager.CountryStats stats = VisitedCountriesManager.getStats(activity);
+                if (stats.missingCount == 0 && stats.visitedCount > 0) {
+                    statsMain.setText("🏆 Все страны мира посещены! (ТОП-1)");
+                    statsMain.setTextColor(GOLD);
+                } else if (stats.visitedCount > 0) {
+                    statsMain.setText("🗺️ Посещено: " + stats.visitedCount + " / " + stats.totalWorldCountries + " (осталось: " + stats.missingCount + ")");
+                    statsMain.setTextColor(Color.WHITE);
+                } else {
+                    statsMain.setText("🗺️ Посещено: 0 / " + stats.totalWorldCountries + " (требуется синхронизация)");
+                    statsMain.setTextColor(SECONDARY);
+                }
+
+                String timeText = stats.lastSyncTime > 0L ?
+                    android.text.format.DateUtils.getRelativeTimeSpanString(stats.lastSyncTime).toString() :
+                    "ещё не обновлялось";
+                String srcText = (stats.source != null && !stats.source.isEmpty()) ? " • " + stats.source : "";
+                statsSub.setText("Синхронизация: " + timeText + srcText);
+
+                btnShowMissing.setText("📋 Недостающие (" + stats.missingCount + ")");
+            }
+        };
+
         final Runnable updateStatus = new Runnable() {
             @Override
             public void run() {
                 statusView.setText(WorldTour.getStatusText());
+                updateVisitedStats.run();
             }
         };
 
+        updateVisitedStats.run();
+        VisitedCountriesManager.addListener(new Runnable() {
+            @Override
+            public void run() {
+                mainHandler.post(updateStatus);
+            }
+        });
+
+        // Sync button click
+        btnSync.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                btnSync.setText("🔄 Загрузка...");
+                VisitedCountriesManager.syncFromServerAsync(activity, new VisitedCountriesManager.SyncCallback() {
+                    @Override
+                    public void onSuccess(final VisitedCountriesManager.CountryStats stats) {
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                btnSync.setText("🔄 Синхронизировать");
+                                updateStatus.run();
+                                Toast.makeText(activity, "Синхронизировано: " + stats.visitedCount + " стран!", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onError(final String message) {
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                btnSync.setText("🔄 Синхронизировать");
+                                updateStatus.run();
+                                Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        // Show Missing dialog click
+        btnShowMissing.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showMissingCountriesDialog(activity, new Runnable() {
+                    @Override
+                    public void run() {
+                        mainHandler.post(updateStatus);
+                    }
+                });
+            }
+        });
+
+        // --- Speed Controls ---
         TextView speedLabel = new TextView(activity);
         speedLabel.setText("Интервал между точками (1.5 сек = 2 пинга на страну):");
         speedLabel.setTextSize(11);
@@ -143,21 +274,26 @@ public final class WorldTourUi {
         speedRow.addView(btn25s);
         card.addView(speedRow);
 
-        // Action 0: TOP 1 BOOST - 141 MISSING COUNTRIES (~4.7 min)
-        View btnTop1 = createActionButton(activity, "👑 ВЗЯТЬ ТОП-1 МИРА (141 страна, 2 сек/точка, ~4.7 мин)", Color.rgb(255, 204, 0), new View.OnClickListener() {
+        // --- Action 0: DYNAMIC TOUR OVER MISSING COUNTRIES ONLY ---
+        View btnMissingTour = createActionButton(activity, "🎯 ВЗЯТЬ НЕДОСТАЮЩИЕ СТРАНЫ (только новые)", GOLD, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WorldTour.start(activity, WorldTour.MODE_TOP1_BOOST, 2000L, new Runnable() {
+                List<WorldTour.City> missing = VisitedCountriesManager.getMissingCountries(activity);
+                if (missing.isEmpty()) {
+                    Toast.makeText(activity, "Все страны уже посещены! Топ-1 мира взят!", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                WorldTour.start(activity, WorldTour.MODE_MISSING_ONLY, currentDelay, new Runnable() {
                     @Override
                     public void run() {
                         mainHandler.post(updateStatus);
                     }
                 });
                 updateStatus.run();
-                Toast.makeText(activity, "Рейд на ТОП-1 мира запущен (141 страна)!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, "Рейд по " + missing.size() + " недостающим странам запущен!", Toast.LENGTH_SHORT).show();
             }
         });
-        card.addView(btnTop1);
+        card.addView(btnMissingTour);
 
         // Action 1: ALL 250 COUNTRIES + 50 US STATES (RELIABLE: ~7.5 min at 1.5s)
         View btnCountries = createActionButton(activity, "🌍 Все страны + 50 штатов (301 точка, надёжно)", PURPLE, new View.OnClickListener() {
@@ -219,6 +355,161 @@ public final class WorldTourUi {
         card.addView(btnStop);
 
         parent.addView(card);
+    }
+
+    public static void showMissingCountriesDialog(final Activity activity, final Runnable onTourStarted) {
+        if (activity == null || activity.isFinishing()) return;
+
+        final List<WorldTour.City> missing = VisitedCountriesManager.getMissingCountries(activity);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar);
+        final AlertDialog dialog = builder.create();
+        dialog.setCanceledOnTouchOutside(true);
+
+        LinearLayout root = new LinearLayout(activity);
+        root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable rootBg = new GradientDrawable();
+        rootBg.setColor(Color.rgb(18, 18, 24));
+        rootBg.setCornerRadius(dp(activity, 16));
+        root.setBackground(rootBg);
+        int pad = dp(activity, 16);
+        root.setPadding(pad, pad, pad, pad);
+
+        // Header Row: Title and Close button
+        LinearLayout header = new LinearLayout(activity);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(activity);
+        title.setText("Недостающие страны (" + missing.size() + ")");
+        title.setTextSize(16);
+        title.setTextColor(Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        header.addView(title, titleLp);
+
+        TextView closeBtn = new TextView(activity);
+        closeBtn.setText("✕");
+        closeBtn.setTextSize(18);
+        closeBtn.setTextColor(SECONDARY);
+        closeBtn.setPadding(dp(activity, 8), dp(activity, 4), dp(activity, 8), dp(activity, 4));
+        closeBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
+        header.addView(closeBtn);
+        root.addView(header);
+
+        TextView sub = new TextView(activity);
+        sub.setText("Нажмите на страну для телепорта или запустите тур по всем");
+        sub.setTextSize(11);
+        sub.setTextColor(SECONDARY);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(activity, 4);
+        subLp.bottomMargin = dp(activity, 10);
+        root.addView(sub, subLp);
+
+        // Quick button inside dialog to start tour
+        if (!missing.isEmpty()) {
+            View startAllBtn = createActionButton(activity, "🚀 Запустить тур по недостающим (" + missing.size() + ")", GOLD, new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    dialog.dismiss();
+                    WorldTour.start(activity, WorldTour.MODE_MISSING_ONLY, currentDelay, onTourStarted);
+                    if (onTourStarted != null) onTourStarted.run();
+                    Toast.makeText(activity, "Тур по недостающим запущен (" + missing.size() + " стран)!", Toast.LENGTH_SHORT).show();
+                }
+            });
+            root.addView(startAllBtn);
+        } else {
+            TextView congrats = new TextView(activity);
+            congrats.setText("🎉 Все страны мира уже посещены!");
+            congrats.setTextColor(GOLD);
+            congrats.setTextSize(14);
+            congrats.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            congrats.setPadding(0, dp(activity, 16), 0, dp(activity, 16));
+            root.addView(congrats);
+        }
+
+        // Scrollable list of missing countries
+        ScrollView sv = new ScrollView(activity);
+        LinearLayout.LayoutParams svLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(activity, 380));
+        svLp.topMargin = dp(activity, 8);
+        sv.setLayoutParams(svLp);
+
+        LinearLayout list = new LinearLayout(activity);
+        list.setOrientation(LinearLayout.VERTICAL);
+
+        for (int i = 0; i < missing.size(); i++) {
+            final WorldTour.City city = missing.get(i);
+            String country = VisitedCountriesManager.extractCountryName(city.name);
+            String flag = VisitedCountriesManager.getFlagForCountry(country);
+
+            LinearLayout item = new LinearLayout(activity);
+            item.setOrientation(LinearLayout.HORIZONTAL);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            int itemPad = dp(activity, 8);
+            item.setPadding(itemPad, itemPad, itemPad, itemPad);
+
+            TextView flagTv = new TextView(activity);
+            flagTv.setText(flag);
+            flagTv.setTextSize(20);
+            flagTv.setPadding(0, 0, dp(activity, 10), 0);
+            item.addView(flagTv);
+
+            LinearLayout textCol = new LinearLayout(activity);
+            textCol.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams textColLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+
+            TextView nameTv = new TextView(activity);
+            nameTv.setText(city.name);
+            nameTv.setTextSize(13);
+            nameTv.setTextColor(Color.WHITE);
+            nameTv.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            textCol.addView(nameTv);
+
+            TextView coordTv = new TextView(activity);
+            coordTv.setText(String.format(java.util.Locale.US, "%.4f, %.4f", city.lat, city.lon));
+            coordTv.setTextSize(11);
+            coordTv.setTextColor(SECONDARY);
+            textCol.addView(coordTv);
+
+            item.addView(textCol, textColLp);
+
+            // Click to teleport directly to this country
+            item.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    StepHooks.setCustomLocation(city.lat, city.lon);
+                    StepHooks.dispatchSyntheticLocation();
+                    VisitedCountriesManager.markCountryVisited(city.name);
+                    Toast.makeText(activity, "Переместились: " + city.name, Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                    if (onTourStarted != null) onTourStarted.run();
+                }
+            });
+
+            list.addView(item);
+
+            if (i < missing.size() - 1) {
+                View div = new View(activity);
+                div.setBackgroundColor(DIVIDER);
+                LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(activity, 1));
+                divLp.leftMargin = dp(activity, 32);
+                list.addView(div, divLp);
+            }
+        }
+
+        sv.addView(list);
+        root.addView(sv);
+
+        dialog.setView(root);
+        dialog.show();
     }
 
     private static TextView createPillButton(Activity a, String text) {
