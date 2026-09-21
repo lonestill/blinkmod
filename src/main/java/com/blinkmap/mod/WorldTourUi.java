@@ -24,7 +24,7 @@ public final class WorldTourUi {
     private static final int CARD_BG = Color.rgb(32, 32, 40);
     private static final int GOLD = Color.rgb(255, 204, 0);
 
-    private static long currentDelay = 1500L; // default 1.5s for reliable network delivery
+    private static long currentDelay = 6000L; // default 6s for Blink backend ingestion
 
     private WorldTourUi() {}
 
@@ -210,7 +210,7 @@ public final class WorldTourUi {
 
         // --- Speed Controls ---
         TextView speedLabel = new TextView(activity);
-        speedLabel.setText("Интервал между точками (1.5 сек = 2 пинга на страну):");
+        speedLabel.setText("Время в стране (для зачёта бэкендом Blink 5-10 сек):");
         speedLabel.setTextSize(11);
         speedLabel.setTextColor(SECONDARY);
         card.addView(speedLabel);
@@ -223,55 +223,55 @@ public final class WorldTourUi {
         speedRowLp.bottomMargin = dp(activity, 12);
         speedRow.setLayoutParams(speedRowLp);
 
-        final TextView btn500 = createPillButton(activity, "500 мс");
-        final TextView btn1s = createPillButton(activity, "1.0 сек");
-        final TextView btn15s = createPillButton(activity, "1.5 сек");
-        final TextView btn25s = createPillButton(activity, "2.5 сек");
+        final TextView btn35s = createPillButton(activity, "3.5 сек");
+        final TextView btn6s = createPillButton(activity, "6.0 сек");
+        final TextView btn8s = createPillButton(activity, "8.0 сек");
+        final TextView btn10s = createPillButton(activity, "10 сек");
 
         final Runnable refreshSpeeds = new Runnable() {
             @Override
             public void run() {
-                setPillSelected(btn500, currentDelay == 500L);
-                setPillSelected(btn1s, currentDelay == 1000L);
-                setPillSelected(btn15s, currentDelay == 1500L);
-                setPillSelected(btn25s, currentDelay == 2500L);
+                setPillSelected(btn35s, currentDelay == 3500L);
+                setPillSelected(btn6s, currentDelay == 6000L);
+                setPillSelected(btn8s, currentDelay == 8000L);
+                setPillSelected(btn10s, currentDelay == 10000L);
             }
         };
         refreshSpeeds.run();
 
-        btn500.setOnClickListener(new View.OnClickListener() {
+        btn35s.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                currentDelay = 500L;
+                currentDelay = 3500L;
                 refreshSpeeds.run();
             }
         });
-        btn1s.setOnClickListener(new View.OnClickListener() {
+        btn6s.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                currentDelay = 1000L;
+                currentDelay = 6000L;
                 refreshSpeeds.run();
             }
         });
-        btn15s.setOnClickListener(new View.OnClickListener() {
+        btn8s.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                currentDelay = 1500L;
+                currentDelay = 8000L;
                 refreshSpeeds.run();
             }
         });
-        btn25s.setOnClickListener(new View.OnClickListener() {
+        btn10s.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                currentDelay = 2500L;
+                currentDelay = 10000L;
                 refreshSpeeds.run();
             }
         });
 
-        speedRow.addView(btn500);
-        speedRow.addView(btn1s);
-        speedRow.addView(btn15s);
-        speedRow.addView(btn25s);
+        speedRow.addView(btn35s);
+        speedRow.addView(btn6s);
+        speedRow.addView(btn8s);
+        speedRow.addView(btn10s);
         card.addView(speedRow);
 
         // --- Action 0: DYNAMIC TOUR OVER MISSING COUNTRIES ONLY ---

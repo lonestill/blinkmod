@@ -231,81 +231,30 @@ public final class WorldTour {
                             } catch (Throwable ignored) {}
                         }
 
-                        // Multi-ping dwell with realistic walking simulation across delayMs window
-                        long dwell = delayMs > 0L ? delayMs : 1500L;
+                        // Multi-step walking simulation per country (requires 5-10s for Blink backend ingestion)
+                        long dwell = delayMs >= 3000L ? delayMs : 6000L;
+                        int steps = Math.max(3, (int)(dwell / 1800L));
+                        long stepSleep = dwell / steps;
+
                         double curLat = city.lat;
                         double curLon = city.lon;
-                        float curBearing = 36.0f;
+                        float curBearing = 35.0f;
 
-                        if (dwell >= 2000L) {
-                            long part = dwell / 3L;
-                            for (int step = 0; step < 3 && running; step++) {
-                                StepHooks.customLat = curLat;
-                                StepHooks.customLon = curLon;
-                                StepHooks.driftCurLat = curLat;
-                                StepHooks.driftCurLon = curLon;
-                                StepHooks.driftSpeed = 1.28f + (float)(step * 0.06);
-                                StepHooks.driftBearing = curBearing;
-                                StepHooks.dispatchSyntheticLocation();
-
-                                if (step < 2) {
-                                    Thread.sleep(part);
-                                    curLat += 0.000018;
-                                    curLon += 0.000015;
-                                    curBearing = (curBearing + 14.0f) % 360.0f;
-                                } else {
-                                    Thread.sleep(dwell - part * 2L);
-                                }
-                            }
-                        } else if (dwell >= 600L) {
-                            long half = dwell / 2L;
-                            // Step 1: Initial arrival
+                        for (int step = 0; step < steps && running; step++) {
                             StepHooks.customLat = curLat;
                             StepHooks.customLon = curLon;
                             StepHooks.driftCurLat = curLat;
                             StepHooks.driftCurLon = curLon;
-                            StepHooks.driftSpeed = 1.30f;
+                            StepHooks.driftSpeed = 1.25f + (float)(step * 0.05);
                             StepHooks.driftBearing = curBearing;
                             StepHooks.dispatchSyntheticLocation();
 
-                            Thread.sleep(half);
+                            Thread.sleep(stepSleep);
                             if (!running) break;
 
-                            // Step 2: Realistic walking step (~2m)
-                            curLat += 0.000022;
-                            curLon += 0.000018;
-                            curBearing = (curBearing + 18.0f) % 360.0f;
-                            StepHooks.customLat = curLat;
-                            StepHooks.customLon = curLon;
-                            StepHooks.driftCurLat = curLat;
-                            StepHooks.driftCurLon = curLon;
-                            StepHooks.driftSpeed = 1.35f;
-                            StepHooks.driftBearing = curBearing;
-                            StepHooks.dispatchSyntheticLocation();
-
-                            Thread.sleep(dwell - half);
-                        } else {
-                            // Fast mode (< 600ms): 2 quick micro-pings
-                            long half = dwell / 2L;
-                            StepHooks.customLat = curLat;
-                            StepHooks.customLon = curLon;
-                            StepHooks.driftCurLat = curLat;
-                            StepHooks.driftCurLon = curLon;
-                            StepHooks.driftSpeed = 1.30f;
-                            StepHooks.dispatchSyntheticLocation();
-
-                            Thread.sleep(half);
-                            if (!running) break;
-
-                            curLat += 0.000015;
-                            curLon += 0.000012;
-                            StepHooks.customLat = curLat;
-                            StepHooks.customLon = curLon;
-                            StepHooks.driftCurLat = curLat;
-                            StepHooks.driftCurLon = curLon;
-                            StepHooks.dispatchSyntheticLocation();
-
-                            Thread.sleep(dwell - half);
+                            curLat += 0.000040;
+                            curLon += 0.000030;
+                            curBearing = (curBearing + 14.0f) % 360.0f;
                         }
                     }
                 } catch (InterruptedException ignored) {
