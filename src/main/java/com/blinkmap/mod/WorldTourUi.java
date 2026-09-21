@@ -19,7 +19,7 @@ public final class WorldTourUi {
     private static final int PURPLE = Color.rgb(138, 92, 255);
     private static final int CARD_BG = Color.rgb(32, 32, 40);
 
-    private static long currentDelay = 1000L;
+    private static long currentDelay = 1500L; // 1.5s safe default
 
     private WorldTourUi() {}
 
@@ -52,7 +52,7 @@ public final class WorldTourUi {
         card.addView(title);
 
         TextView desc = new TextView(activity);
-        desc.setText("Быстрое перемещение по городам мира и всей планете");
+        desc.setText("Быстрое перемещение по всем 249 странам и городам планеты");
         desc.setTextSize(12);
         desc.setTextColor(SECONDARY);
         LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
@@ -92,31 +92,31 @@ public final class WorldTourUi {
         speedRowLp.bottomMargin = dp(activity, 12);
         speedRow.setLayoutParams(speedRowLp);
 
-        final TextView btn250 = createPillButton(activity, "250 мс");
-        final TextView btn1s = createPillButton(activity, "1 сек");
+        final TextView btn500 = createPillButton(activity, "500 мс");
+        final TextView btn15s = createPillButton(activity, "1.5 сек");
         final TextView btn3s = createPillButton(activity, "3 сек");
 
         final Runnable refreshSpeeds = new Runnable() {
             @Override
             public void run() {
-                setPillSelected(btn250, currentDelay == 250L);
-                setPillSelected(btn1s, currentDelay == 1000L);
+                setPillSelected(btn500, currentDelay == 500L);
+                setPillSelected(btn15s, currentDelay == 1500L);
                 setPillSelected(btn3s, currentDelay == 3000L);
             }
         };
         refreshSpeeds.run();
 
-        btn250.setOnClickListener(new View.OnClickListener() {
+        btn500.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                currentDelay = 250L;
+                currentDelay = 500L;
                 refreshSpeeds.run();
             }
         });
-        btn1s.setOnClickListener(new View.OnClickListener() {
+        btn15s.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                currentDelay = 1000L;
+                currentDelay = 1500L;
                 refreshSpeeds.run();
             }
         });
@@ -128,26 +128,44 @@ public final class WorldTourUi {
             }
         });
 
-        speedRow.addView(btn250);
-        speedRow.addView(btn1s);
+        speedRow.addView(btn500);
+        speedRow.addView(btn15s);
         speedRow.addView(btn3s);
         card.addView(speedRow);
 
-        View btnCities = createActionButton(activity, "✈️ Облететь города мира (195)", PURPLE, new View.OnClickListener() {
+        // Action 1: All 249 countries and cities (1624 targets)
+        View btnAll = createActionButton(activity, "🌍 Все 249 стран и городов (1624 точки)", PURPLE, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WorldTour.start(activity, WorldTour.MODE_CITIES, currentDelay, new Runnable() {
+                WorldTour.start(activity, WorldTour.MODE_ALL_COUNTRIES, currentDelay, new Runnable() {
                     @Override
                     public void run() {
                         mainHandler.post(updateStatus);
                     }
                 });
                 updateStatus.run();
-                Toast.makeText(activity, "Турне по городам запущено!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, "Турне по 249 странам запущено!", Toast.LENGTH_SHORT).show();
             }
         });
-        card.addView(btnCities);
+        card.addView(btnAll);
 
+        // Action 2: Capitals (fast)
+        View btnCapitals = createActionButton(activity, "✈️ Столицы мира (быстрый тур)", PURPLE, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                WorldTour.start(activity, WorldTour.MODE_CAPITALS, currentDelay, new Runnable() {
+                    @Override
+                    public void run() {
+                        mainHandler.post(updateStatus);
+                    }
+                });
+                updateStatus.run();
+                Toast.makeText(activity, "Турне по столицам запущено!", Toast.LENGTH_SHORT).show();
+            }
+        });
+        card.addView(btnCapitals);
+
+        // Action 3: Globe Grid (180 coords covering land & ocean)
         View btnGrid = createActionButton(activity, "🌊 Облететь планету (сетка + океаны)", PURPLE, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -158,11 +176,12 @@ public final class WorldTourUi {
                     }
                 });
                 updateStatus.run();
-                Toast.makeText(activity, "Глобальное турне запущено!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, "Глобальная сетка запущена!", Toast.LENGTH_SHORT).show();
             }
         });
         card.addView(btnGrid);
 
+        // Action 4: Stop
         View btnStop = createActionButton(activity, "⏹ Остановить турне", Color.rgb(255, 80, 80), new View.OnClickListener() {
             @Override
             public void onClick(View v) {
