@@ -19,7 +19,7 @@ public final class WorldTourUi {
     private static final int PURPLE = Color.rgb(138, 92, 255);
     private static final int CARD_BG = Color.rgb(32, 32, 40);
 
-    private static long currentDelay = 500L; // default 500ms for fast countries tour
+    private static long currentDelay = 1500L; // default 1.5s for reliable network delivery
 
     private WorldTourUi() {}
 
@@ -79,8 +79,8 @@ public final class WorldTourUi {
         };
 
         TextView speedLabel = new TextView(activity);
-        speedLabel.setText("Интервал между точками:");
-        speedLabel.setTextSize(12);
+        speedLabel.setText("Интервал между точками (1.5 сек = 2 пинга на страну):");
+        speedLabel.setTextSize(11);
         speedLabel.setTextColor(SECONDARY);
         card.addView(speedLabel);
 
@@ -92,31 +92,33 @@ public final class WorldTourUi {
         speedRowLp.bottomMargin = dp(activity, 12);
         speedRow.setLayoutParams(speedRowLp);
 
-        final TextView btn250 = createPillButton(activity, "250 мс");
         final TextView btn500 = createPillButton(activity, "500 мс");
+        final TextView btn1s = createPillButton(activity, "1.0 сек");
         final TextView btn15s = createPillButton(activity, "1.5 сек");
+        final TextView btn25s = createPillButton(activity, "2.5 сек");
 
         final Runnable refreshSpeeds = new Runnable() {
             @Override
             public void run() {
-                setPillSelected(btn250, currentDelay == 250L);
                 setPillSelected(btn500, currentDelay == 500L);
+                setPillSelected(btn1s, currentDelay == 1000L);
                 setPillSelected(btn15s, currentDelay == 1500L);
+                setPillSelected(btn25s, currentDelay == 2500L);
             }
         };
         refreshSpeeds.run();
 
-        btn250.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                currentDelay = 250L;
-                refreshSpeeds.run();
-            }
-        });
         btn500.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 currentDelay = 500L;
+                refreshSpeeds.run();
+            }
+        });
+        btn1s.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentDelay = 1000L;
                 refreshSpeeds.run();
             }
         });
@@ -127,14 +129,22 @@ public final class WorldTourUi {
                 refreshSpeeds.run();
             }
         });
+        btn25s.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentDelay = 2500L;
+                refreshSpeeds.run();
+            }
+        });
 
-        speedRow.addView(btn250);
         speedRow.addView(btn500);
+        speedRow.addView(btn1s);
         speedRow.addView(btn15s);
+        speedRow.addView(btn25s);
         card.addView(speedRow);
 
-        // Action 1: ALL 250 COUNTRIES + 50 US STATES (FAST: ~2.5 min)
-        View btnCountries = createActionButton(activity, "🌍 Все страны + 50 штатов США (299 точек)", PURPLE, new View.OnClickListener() {
+        // Action 1: ALL 250 COUNTRIES + 50 US STATES (RELIABLE: ~7.5 min at 1.5s)
+        View btnCountries = createActionButton(activity, "🌍 Все страны + 50 штатов (301 точка, надёжно)", PURPLE, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 WorldTour.start(activity, WorldTour.MODE_COUNTRIES_ONLY, currentDelay, new Runnable() {
@@ -144,7 +154,7 @@ public final class WorldTourUi {
                     }
                 });
                 updateStatus.run();
-                Toast.makeText(activity, "Тур по 250 странам и 50 штатам запущен!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, "Надёжный тур по всем странам запущен!", Toast.LENGTH_SHORT).show();
             }
         });
         card.addView(btnCountries);

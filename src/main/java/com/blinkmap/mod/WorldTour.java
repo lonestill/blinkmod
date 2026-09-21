@@ -1,6 +1,7 @@
 package com.blinkmap.mod;
 
 import android.content.Context;
+import android.os.PowerManager;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -48,7 +49,7 @@ public final class WorldTour {
         new City("Сеул (Южная Корея)", 37.5665, 126.9780),
         new City("Пхеньян (Северная Корея)", 39.0392, 125.7625),
         new City("Пекин (Китай)", 39.9042, 116.4074),
-        new City("Тайбэй (Тайвань)", 25.0330, 121.5654),
+        new City("Тайбей (Тайвань)", 25.0330, 121.5654),
         new City("Сингапур", 1.3521, 103.8198),
         new City("Бангкок (Таиланд)", 13.7563, 100.5018),
         new City("Нью-Дели (Индия)", 28.6139, 77.2090),
@@ -166,6 +167,17 @@ public final class WorldTour {
             @Override
             public void run() {
                 City lastCity = null;
+                PowerManager.WakeLock wakeLock = null;
+                if (context != null) {
+                    try {
+                        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+                        if (pm != null) {
+                            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BlinkMod:WorldTour");
+                            wakeLock.acquire(30 * 60 * 1000L); // 30 minutes max
+                        }
+                    } catch (Throwable ignored) {}
+                }
+
                 try {
                     for (int i = 0; i < targets.length && running; i++) {
                         City city = targets[i];
@@ -186,7 +198,15 @@ public final class WorldTour {
                             } catch (Throwable ignored) {}
                         }
 
-                        if (delayMs > 0) {
+                        // Multi-ping dwell: if delayMs >= 700ms, split into 2 pings
+                        // to guarantee network ingestion and backend visit registration
+                        if (delayMs >= 700L) {
+                            long half = delayMs / 2L;
+                            Thread.sleep(half);
+                            if (!running) break;
+                            StepHooks.dispatchSyntheticLocation();
+                            Thread.sleep(delayMs - half);
+                        } else if (delayMs > 0L) {
                             Thread.sleep(delayMs);
                         }
                     }
@@ -195,6 +215,11 @@ public final class WorldTour {
                     currentPlace = "Ошибка: " + e.getClass().getSimpleName();
                 } finally {
                     running = false;
+                    if (wakeLock != null && wakeLock.isHeld()) {
+                        try {
+                            wakeLock.release();
+                        } catch (Throwable ignored) {}
+                    }
                     if (lastCity != null && context != null) {
                         try {
                             StepHooks.setCustomLocation(lastCity.lat, lastCity.lon);
@@ -209,7 +234,6 @@ public final class WorldTour {
             }
         }, "BlinkMod-WorldTour");
 
-        runnerThread.start();
     }
 
     public static synchronized void stop() {
