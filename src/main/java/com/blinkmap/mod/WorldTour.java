@@ -234,6 +234,7 @@ public final class WorldTour {
             }
         }, "BlinkMod-WorldTour");
 
+        runnerThread.start();
     }
 
     public static synchronized void stop() {
