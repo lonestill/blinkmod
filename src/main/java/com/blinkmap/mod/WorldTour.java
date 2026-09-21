@@ -201,18 +201,16 @@ public final class WorldTour {
                             } catch (Throwable ignored) {}
                         }
 
-                        // Multi-ping & server confirmation:
                         if (mode == MODE_TOP1_BOOST) {
-                            long before = StepHooks.geoCounter;
+                            // Dwell 3.2s with 3 pings across the window to cleanly beat conflate()
                             StepHooks.dispatchSyntheticLocation();
-                            boolean confirmed = StepHooks.waitForGeo(before, 3500L);
-                            if (!confirmed && running) {
-                                // Retry once if network had a hiccup
-                                StepHooks.dispatchSyntheticLocation();
-                                StepHooks.waitForGeo(before, 2000L);
-                            }
-                            // Breather so server database commits the polygon
-                            Thread.sleep(300L);
+                            Thread.sleep(1100L);
+                            if (!running) break;
+                            StepHooks.dispatchSyntheticLocation();
+                            Thread.sleep(1100L);
+                            if (!running) break;
+                            StepHooks.dispatchSyntheticLocation();
+                            Thread.sleep(1000L);
                         } else if (delayMs >= 2000L) {
                             long third = delayMs / 3L;
                             Thread.sleep(third);

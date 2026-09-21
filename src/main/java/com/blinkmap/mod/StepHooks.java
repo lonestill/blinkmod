@@ -31,32 +31,6 @@ public final class StepHooks {
     public static volatile int driftStepsAdded = 0;
     public static volatile long driftLastTime = 0;
 
-    private static final Object geoSyncLock = new Object();
-    public static volatile long geoCounter = 0;
-
-    public static void onGeoResponse() {
-        synchronized (geoSyncLock) {
-            geoCounter++;
-            geoSyncLock.notifyAll();
-        }
-    }
-
-    public static boolean waitForGeo(long expectedBefore, long timeoutMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        synchronized (geoSyncLock) {
-            while (geoCounter <= expectedBefore) {
-                long wait = deadline - System.currentTimeMillis();
-                if (wait <= 0) return false;
-                try {
-                    geoSyncLock.wait(wait);
-                } catch (InterruptedException e) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
-
     private StepHooks() {}
 
     public static void setCustomLocation(double lat, double lon) {
