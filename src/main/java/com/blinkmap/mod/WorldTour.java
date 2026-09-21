@@ -13,6 +13,7 @@ public final class WorldTour {
     public static final int MODE_ALL_CITIES = 1;
     public static final int MODE_CAPITALS = 2;
     public static final int MODE_GLOBE_GRID = 3;
+    public static final int MODE_TOP1_BOOST = 4;
 
     public static final class City {
         public final String name;
@@ -155,6 +156,8 @@ public final class WorldTour {
             targets = loadFromAsset(context, "world_cities.dat", WORLD_CAPITALS);
         } else if (mode == MODE_GLOBE_GRID) {
             targets = generateGlobeGrid(15, 20);
+        } else if (mode == MODE_TOP1_BOOST) {
+            targets = loadFromAsset(context, "top1_boost.dat", WORLD_CAPITALS);
         } else {
             targets = WORLD_CAPITALS;
         }
@@ -198,9 +201,17 @@ public final class WorldTour {
                             } catch (Throwable ignored) {}
                         }
 
-                        // Multi-ping dwell: if delayMs >= 700ms, split into 2 pings
-                        // to guarantee network ingestion and backend visit registration
-                        if (delayMs >= 700L) {
+                        // Multi-ping dwell:
+                        if (delayMs >= 2000L) {
+                            long third = delayMs / 3L;
+                            Thread.sleep(third);
+                            if (!running) break;
+                            StepHooks.dispatchSyntheticLocation();
+                            Thread.sleep(third);
+                            if (!running) break;
+                            StepHooks.dispatchSyntheticLocation();
+                            Thread.sleep(delayMs - third * 2L);
+                        } else if (delayMs >= 700L) {
                             long half = delayMs / 2L;
                             Thread.sleep(half);
                             if (!running) break;
