@@ -34,6 +34,8 @@ public final class ModSettingsActivity extends Activity {
     private static final int BASE_BG=Color.rgb(11,11,13), PRIMARY=Color.WHITE;
     private static final int SECONDARY=Color.rgb(148,148,156), DIVIDER=Color.rgb(46,46,51), PURPLE=Color.rgb(128,77,255);
     private String page=MAIN;
+    private int devTaps=0;
+    private long lastTapTime=0;
 
     @Override protected void onCreate(Bundle b){super.onCreate(b);setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);getWindow().setStatusBarColor(bg());getWindow().setNavigationBarColor(bg());render(MAIN);}
     @Override public void onBackPressed(){if(MAIN.equals(page))finish();else render(MAIN);}
@@ -61,10 +63,10 @@ public final class ModSettingsActivity extends Activity {
     }
 
     private void main(LinearLayout b){
-        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.setPadding(dp(4),dp(8),0,dp(22));brand.addView(appIcon(),new LinearLayout.LayoutParams(dp(52),dp(52)));LinearLayout bn=labels("BlinkMod","версия 2.0 (Top-1 AutoTour)");LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,dp(52),1);bp.leftMargin=dp(15);brand.addView(bn,bp);b.addView(brand);
+        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.setPadding(dp(4),dp(8),0,dp(22));brand.addView(appIcon(),new LinearLayout.LayoutParams(dp(52),dp(52)));LinearLayout bn=labels("BlinkMod",ModConfig.getVersionDisplay(this));bn.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){long now=System.currentTimeMillis();if(now-lastTapTime>2000)devTaps=0;lastTapTime=now;devTaps++;if(devTaps>=5){devTaps=0;boolean enabled=ModConfig.toggleDevMode(ModSettingsActivity.this);Toast.makeText(ModSettingsActivity.this,enabled?"⚡ Режим разработчика включён!":"🔒 Режим разработчика выключен",Toast.LENGTH_SHORT).show();render(MAIN);}}});LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,dp(52),1);bp.leftMargin=dp(15);brand.addView(bn,bp);b.addView(brand);
         section(b,"ВОЗМОЖНОСТИ");LinearLayout features=group();features.addView(nav("Шаги","Быстрое действие и синхронизация",Icon.STEPS,STEPS));features.addView(line());features.addView(nav("Приватность","Геолокация и заряд батареи",Icon.SHIELD,PRIVACY));features.addView(line());features.addView(nav("Прочее","Чаты, друзья и профили",Icon.MISC,MISC));b.addView(features,bottom(22));
         section(b,"ОФОРМЛЕНИЕ");LinearLayout look=group();look.addView(nav("Интерфейс","Тема и кнопка BlinkMod",Icon.UI,UI));b.addView(look,bottom(22));
-        section(b,"ИНСТРУМЕНТЫ");LinearLayout tools=group();tools.addView(nav("Blink Lab","Проверка API и журнал",Icon.LAB,LAB));tools.addView(line());tools.addView(nav("Навигация по ID","Открыть профиль, чат или маркер",Icon.NAVIGATE,NAVIGATE));tools.addView(line());tools.addView(nav("Конфигурация","Экспорт и восстановление настроек",Icon.CONFIG,CONFIG));tools.addView(line());tools.addView(nav("О BlinkMod","Версия и канал проекта",Icon.INFO,ABOUT));b.addView(tools,bottom(20));
+        section(b,"ИНСТРУМЕНТЫ");LinearLayout tools=group();if(ModConfig.isDevMode(this)){tools.addView(nav("Blink Lab","Проверка API и журнал",Icon.LAB,LAB));tools.addView(line());}tools.addView(nav("Навигация по ID","Открыть профиль, чат или маркер",Icon.NAVIGATE,NAVIGATE));tools.addView(line());tools.addView(nav("Конфигурация","Экспорт и восстановление настроек",Icon.CONFIG,CONFIG));tools.addView(line());tools.addView(nav("О BlinkMod","Версия и канал проекта",Icon.INFO,ABOUT));b.addView(tools,bottom(20));
     }
 
     private ImageView appIcon(){ImageView v=new ImageView(this);try{v.setImageDrawable(getPackageManager().getApplicationIcon(getPackageName()));}catch(Exception ignored){}v.setScaleType(ImageView.ScaleType.FIT_CENTER);return v;}

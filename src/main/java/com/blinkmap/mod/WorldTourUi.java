@@ -274,42 +274,45 @@ public final class WorldTourUi {
         speedRow.addView(btn10s);
         card.addView(speedRow);
 
-        // --- Action 0: DYNAMIC TOUR OVER MISSING COUNTRIES ONLY ---
-        View btnMissingTour = createActionButton(activity, "🎯 ВЗЯТЬ НЕДОСТАЮЩИЕ СТРАНЫ (только новые)", GOLD, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                List<WorldTour.City> missing = VisitedCountriesManager.getMissingCountries(activity);
-                if (missing.isEmpty()) {
-                    Toast.makeText(activity, "Все страны уже посещены! Топ-1 мира взят!", Toast.LENGTH_SHORT).show();
-                    return;
+        // --- DEV-ONLY ACTIONS (Gated behind ModConfig.isDevMode) ---
+        if (ModConfig.isDevMode(activity)) {
+            // Action 0: DYNAMIC TOUR OVER MISSING COUNTRIES ONLY
+            View btnMissingTour = createActionButton(activity, "🎯 ВЗЯТЬ НЕДОСТАЮЩИЕ СТРАНЫ (только новые)", GOLD, new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    List<WorldTour.City> missing = VisitedCountriesManager.getMissingCountries(activity);
+                    if (missing.isEmpty()) {
+                        Toast.makeText(activity, "Все страны уже посещены! Топ-1 мира взят!", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    WorldTour.start(activity, WorldTour.MODE_MISSING_ONLY, currentDelay, new Runnable() {
+                        @Override
+                        public void run() {
+                            mainHandler.post(updateStatus);
+                        }
+                    });
+                    updateStatus.run();
+                    Toast.makeText(activity, "Рейд по " + missing.size() + " недостающим странам запущен!", Toast.LENGTH_SHORT).show();
                 }
-                WorldTour.start(activity, WorldTour.MODE_MISSING_ONLY, currentDelay, new Runnable() {
-                    @Override
-                    public void run() {
-                        mainHandler.post(updateStatus);
-                    }
-                });
-                updateStatus.run();
-                Toast.makeText(activity, "Рейд по " + missing.size() + " недостающим странам запущен!", Toast.LENGTH_SHORT).show();
-            }
-        });
-        card.addView(btnMissingTour);
+            });
+            card.addView(btnMissingTour);
 
-        // Action 0.5: SNIPER TOP-1 BOOST (42 sovereign guaranteed targets)
-        View btnTop1 = createActionButton(activity, "🏆 СНАЙПЕР ТОП-1 МИРА (42 страны)", GOLD, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                WorldTour.start(activity, WorldTour.MODE_TOP1_BOOST, currentDelay, new Runnable() {
-                    @Override
-                    public void run() {
-                        mainHandler.post(updateStatus);
-                    }
-                });
-                updateStatus.run();
-                Toast.makeText(activity, "Снайперский тур ТОП-1 запущен (42 страны)!", Toast.LENGTH_SHORT).show();
-            }
-        });
-        card.addView(btnTop1);
+            // Action 0.5: SNIPER TOP-1 BOOST (42 sovereign guaranteed targets)
+            View btnTop1 = createActionButton(activity, "🏆 СНАЙПЕР ТОП-1 МИРА (42 страны)", GOLD, new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    WorldTour.start(activity, WorldTour.MODE_TOP1_BOOST, currentDelay, new Runnable() {
+                        @Override
+                        public void run() {
+                            mainHandler.post(updateStatus);
+                        }
+                    });
+                    updateStatus.run();
+                    Toast.makeText(activity, "Снайперский тур ТОП-1 запущен (42 страны)!", Toast.LENGTH_SHORT).show();
+                }
+            });
+            card.addView(btnTop1);
+        }
 
         // Action 1: ALL 230 OFFICIAL COUNTRIES
         View btnCountries = createActionButton(activity, "🌍 Все страны (230 точек базы Blink, надёжно)", PURPLE, new View.OnClickListener() {

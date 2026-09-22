@@ -3,12 +3,30 @@ package com.blinkmap.mod;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/** Called from tiny smali bridges inside Blink's step request/display models. */
+/**
+ * Core runtime hook router for BlinkMod.
+ *
+ * Intercepts and overrides critical framework and application events directly
+ * from bytecode-level hooks injected into Blink's decompiled smali:
+ * - Geolocation pipeline (GPS spoofing, vehicle drift, map pointer positioning)
+ * - Step synchronization and display
+ * - Battery charge spoofing and suppression
+ * - Rate limiting and transmission pause
+ *
+ * CRITICAL COMPATIBILITY NOTE:
+ * The methods {@link #isSpoofingActive()} and {@link #hookUserLatLng} are called
+ * directly from original smali classes (e.g. UserPointerController, a15, ef0, syh).
+ * Do NOT remove or modify their signatures.
+ */
 public final class StepHooks {
     private static volatile Context app;
+
+    // --- Battery Hooks ---
     public static volatile boolean hideCharge;
     public static volatile int forcedCharge = -1;
     public static volatile int chargeFilterHits;
+
+    // --- Location Transmission & Pause ---
     public static volatile boolean pauseLocation;
     public static volatile long pauseUntil;
     public static volatile int locationBlockHits;
@@ -17,6 +35,8 @@ public final class StepHooks {
     public static volatile int geoRateLimitHits;
     public static volatile int locationPrecision;
     public static volatile int locationPrecisionHits;
+
+    // --- Coordinates & Spoofing State ---
     public static volatile double customLat;
     public static volatile double customLon;
     public static volatile double driftCurLat;
