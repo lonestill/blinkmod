@@ -408,6 +408,27 @@ public final class VisitedCountriesManager {
                 }
             }
         }
+
+        // Fast resolution for short names and disputed territories
+        NAME_TO_CODE.put("ватикан", "VA");
+        NAME_TO_CODE.put("косово", "XK");
+        NAME_TO_CODE.put("западная сахара", "EH");
+        NAME_TO_CODE.put("маршалловы острова", "MH");
+        NAME_TO_CODE.put("палау", "PW");
+        NAME_TO_CODE.put("науру", "NR");
+        NAME_TO_CODE.put("тувалу", "TV");
+        NAME_TO_CODE.put("кирибати", "KI");
+        NAME_TO_CODE.put("микронезия", "FM");
+        NAME_TO_CODE.put("самоа", "WS");
+        NAME_TO_CODE.put("тонга", "TO");
+        NAME_TO_CODE.put("вануату", "VU");
+        NAME_TO_CODE.put("коморы", "KM");
+        NAME_TO_CODE.put("сейшелы", "SC");
+        NAME_TO_CODE.put("маврикий", "MU");
+        NAME_TO_CODE.put("кабо-верде", "CV");
+        NAME_TO_CODE.put("кабо верде", "CV");
+        NAME_TO_CODE.put("сан-томе и принсипи", "ST");
+        NAME_TO_CODE.put("сан томе и принсипи", "ST");
     }
 
     private static final Set<String> visitedCodes = new HashSet<String>();
@@ -437,14 +458,18 @@ public final class VisitedCountriesManager {
         if (visitedCodes.isEmpty()) {
             Set<String> savedCodes = p.getStringSet("visited_countries_codes", null);
             if (savedCodes != null && !savedCodes.isEmpty()) {
+                Set<String> cleanCodes = new HashSet<String>();
                 for (String c : savedCodes) {
+                    if (c == null) continue;
                     c = c.trim().toUpperCase(Locale.ROOT);
-                    if (!c.isEmpty()) {
+                    if (c.length() == 2 && Character.isLetter(c.charAt(0)) && Character.isLetter(c.charAt(1))) {
                         visitedCodes.add(c);
+                        cleanCodes.add(c);
                         String name = CODE_TO_NAME.get(c);
                         if (name != null) visitedNames.add(normalize(name));
                     }
                 }
+                p.edit().putStringSet("visited_countries_codes", cleanCodes).apply();
             }
         }
 
@@ -462,9 +487,7 @@ public final class VisitedCountriesManager {
                 JSONObject obj = arr.getJSONObject(i);
                 VisitedCountry vc = VisitedCountry.fromJSON(obj);
                 if (vc != null) {
-                    if (!vc.code.isEmpty()) visitedCodes.add(vc.code);
-                    if (!vc.name.isEmpty()) visitedNames.add(normalize(vc.name));
-                    visitedMap.put(vc.code.isEmpty() ? vc.name : vc.code, vc);
+                    recordVisited(vc);
                 }
             }
         } catch (Throwable ignored) {}
@@ -479,6 +502,25 @@ public final class VisitedCountriesManager {
         int cp1 = 0x1F1E6 + (c1 - 'A');
         int cp2 = 0x1F1E6 + (c2 - 'A');
         return new String(Character.toChars(cp1)) + new String(Character.toChars(cp2));
+    }
+
+    public static String flagToIsoCode(String flag) {
+        if (flag == null || flag.isEmpty()) return null;
+        try {
+            int len = flag.length();
+            StringBuilder sb = new StringBuilder(2);
+            for (int i = 0; i < len; ) {
+                int cp = flag.codePointAt(i);
+                if (cp >= 0x1F1E6 && cp <= 0x1F1FF) {
+                    sb.append((char) ('A' + (cp - 0x1F1E6)));
+                }
+                i += Character.charCount(cp);
+            }
+            if (sb.length() == 2) {
+                return sb.toString().toUpperCase(Locale.ROOT);
+            }
+        } catch (Throwable ignored) {}
+        return null;
     }
 
     public static String getFlagForCountry(String rawName) {
@@ -575,9 +617,16 @@ public final class VisitedCountriesManager {
         ensureDictionaries();
         if (countryName == null || countryName.trim().isEmpty()) return;
         String code = resolveCountryCode(countryName);
-        if (code != null) visitedCodes.add(code);
-        String norm = normalize(countryName);
-        visitedNames.add(norm);
+        if (isIsoCode(code)) {
+            visitedCodes.add(code);
+            String name = CODE_TO_NAME.get(code);
+            if (name != null) visitedNames.add(normalize(name));
+        }
+        String countryOnly = extractCountryName(countryName);
+        String norm = normalize(countryOnly);
+        if (!norm.isEmpty()) {
+            visitedNames.add(norm);
+        }
 
         Context c = StepHooks.getApp();
         if (c != null) {
@@ -670,6 +719,13 @@ public final class VisitedCountriesManager {
         return added;
     }
 
+    public static boolean isIsoCode(String code) {
+        if (code == null || code.length() != 2) return false;
+        char c1 = code.charAt(0);
+        char c2 = code.charAt(1);
+        return (c1 >= 'A' && c1 <= 'Z') && (c2 >= 'A' && c2 <= 'Z');
+    }
+
     private static boolean parseCountriesObject(JSONObject obj) {
         boolean added = false;
         Iterator<String> keys = obj.keys();
@@ -680,23 +736,35 @@ public final class VisitedCountriesManager {
                 Object val = obj.get(key);
                 if (val instanceof JSONObject) {
                     JSONObject sub = (JSONObject) val;
-                    String code = sub.optString("id", sub.optString("code", key));
-                    String name = sub.optString("name", CODE_TO_NAME.get(code.toUpperCase(Locale.ROOT)));
+                    String rawCode = sub.optString("id", sub.optString("code", key));
+                    String name = sub.optString("name", sub.optString("title", ""));
                     String flag = sub.optString("flag", "");
                     int cities = sub.optInt("cities_count", sub.optInt("citiesVisited", 1));
-                    VisitedCountry vc = new VisitedCountry(code, name, flag, cities, System.currentTimeMillis());
-                    recordVisited(vc);
-                    added = true;
+
+                    String code = null;
+                    if (flag != null && !flag.isEmpty()) code = flagToIsoCode(flag);
+                    if (code == null && isIsoCode(rawCode)) code = rawCode.toUpperCase(Locale.ROOT);
+                    if (code == null && !name.isEmpty()) code = resolveCountryCode(name);
+                    if (code == null && isIsoCode(key)) code = key.toUpperCase(Locale.ROOT);
+
+                    if (isIsoCode(code)) {
+                        if (name.isEmpty()) name = CODE_TO_NAME.get(code);
+                        VisitedCountry vc = new VisitedCountry(code, name, (flag != null && !flag.isEmpty()) ? flag : getFlagForCode(code), cities, System.currentTimeMillis());
+                        recordVisited(vc);
+                        added = true;
+                    }
                 } else {
                     String code = resolveCountryCode(key);
-                    if (code == null && key.length() == 2) code = key.toUpperCase(Locale.ROOT);
-                    String name = code != null ? CODE_TO_NAME.get(code) : key;
-                    if (name == null) name = key;
-                    int cities = 1;
-                    if (val instanceof Number) cities = ((Number) val).intValue();
-                    VisitedCountry vc = new VisitedCountry(code, name, getFlagForCode(code), cities, System.currentTimeMillis());
-                    recordVisited(vc);
-                    added = true;
+                    if (code == null && isIsoCode(key)) code = key.toUpperCase(Locale.ROOT);
+                    if (isIsoCode(code)) {
+                        String name = CODE_TO_NAME.get(code);
+                        if (name == null) name = key;
+                        int cities = 1;
+                        if (val instanceof Number) cities = ((Number) val).intValue();
+                        VisitedCountry vc = new VisitedCountry(code, name, getFlagForCode(code), cities, System.currentTimeMillis());
+                        recordVisited(vc);
+                        added = true;
+                    }
                 }
             } catch (Throwable ignored) {}
         }
@@ -704,33 +772,70 @@ public final class VisitedCountriesManager {
     }
 
     private static boolean parseSingleCountryObject(JSONObject item) {
-        String code = item.optString("id", item.optString("code", item.optString("country_code", "")));
+        String rawCode = item.optString("id", item.optString("code", item.optString("country_code", "")));
         String name = item.optString("name", item.optString("title", item.optString("country", "")));
         String flag = item.optString("flag", "");
         int cities = item.optInt("cities_count", item.optInt("citiesVisited", 1));
 
-        if (code.isEmpty() && !name.isEmpty()) {
+        String code = null;
+        // 1. Try to extract ISO code from flag emoji (e.g. 🇬🇩 -> GD)
+        if (flag != null && !flag.isEmpty()) {
+            code = flagToIsoCode(flag);
+        }
+
+        // 2. If rawCode is already a 2-letter ISO code
+        if (code == null && isIsoCode(rawCode)) {
+            code = rawCode.toUpperCase(Locale.ROOT);
+        }
+
+        // 3. Resolve from country name
+        if (code == null && !name.isEmpty()) {
             code = resolveCountryCode(name);
         }
-        if (name.isEmpty() && !code.isEmpty()) {
-            name = CODE_TO_NAME.get(code.toUpperCase(Locale.ROOT));
+
+        // 4. Fill name if missing
+        if (name.isEmpty() && code != null) {
+            name = CODE_TO_NAME.get(code);
             if (name == null) name = code;
         }
 
-        if (!code.isEmpty() || !name.isEmpty()) {
-            VisitedCountry vc = new VisitedCountry(code, name, flag, cities, System.currentTimeMillis());
+        if (isIsoCode(code)) {
+            VisitedCountry vc = new VisitedCountry(code, name, (flag != null && !flag.isEmpty()) ? flag : getFlagForCode(code), cities, System.currentTimeMillis());
             recordVisited(vc);
             return true;
+        } else if (!name.isEmpty()) {
+            String resolved = resolveCountryCode(name);
+            if (isIsoCode(resolved)) {
+                VisitedCountry vc = new VisitedCountry(resolved, name, flag, cities, System.currentTimeMillis());
+                recordVisited(vc);
+                return true;
+            }
         }
         return false;
     }
 
     private static void recordVisited(VisitedCountry vc) {
         if (vc == null) return;
-        if (!vc.code.isEmpty()) visitedCodes.add(vc.code);
-        if (!vc.name.isEmpty()) visitedNames.add(normalize(vc.name));
-        String key = !vc.code.isEmpty() ? vc.code : vc.name;
-        visitedMap.put(key, vc);
+        String code = vc.code;
+        if (isIsoCode(code)) {
+            code = code.toUpperCase(Locale.ROOT);
+            visitedCodes.add(code);
+            String name = vc.name;
+            if (name == null || name.isEmpty()) {
+                name = CODE_TO_NAME.get(code);
+            }
+            if (name != null && !name.isEmpty()) {
+                visitedNames.add(normalize(name));
+            }
+            visitedMap.put(code, vc);
+        } else if (vc.name != null && !vc.name.isEmpty()) {
+            String resolved = resolveCountryCode(vc.name);
+            if (isIsoCode(resolved)) {
+                visitedCodes.add(resolved);
+                visitedNames.add(normalize(vc.name));
+                visitedMap.put(resolved, vc);
+            }
+        }
     }
 
     public static void onHttpResponse(String url, String body) {
@@ -825,15 +930,19 @@ public final class VisitedCountriesManager {
                 String errorMsg = null;
 
                 if (token != null && !token.isEmpty()) {
-                    try {
-                        String ep = "https://api.blink-maps.com/api/footprints/countries";
+                    String[] endpoints = new String[] {
+                        "https://pin.apiblink.ru/api/footprints/stats/world",
+                        "https://pin.apiblink.ru/api/footprints/countries"
+                    };
+                    for (String ep : endpoints) {
+                        if (apiSuccess) break;
                         HttpURLConnection conn = null;
                         try {
                             URL u = new URL(ep);
                             conn = (HttpURLConnection) u.openConnection();
                             conn.setRequestMethod("GET");
-                            conn.setConnectTimeout(2000);
-                            conn.setReadTimeout(3000);
+                            conn.setConnectTimeout(4000);
+                            conn.setReadTimeout(6000);
                             conn.setRequestProperty("Authorization", token);
                             conn.setRequestProperty("Accept", "application/json");
                             conn.setRequestProperty("User-Agent", "Blink/1.32.0 (Android)");
@@ -848,13 +957,13 @@ public final class VisitedCountriesManager {
                                     sb.append(line);
                                 }
                                 reader.close();
-                                apiSuccess = parseAndSaveFootprints(ctx, sb.toString(), "Прямой API");
+                                apiSuccess = parseAndSaveFootprints(ctx, sb.toString(), "Прямой API: " + (ep.contains("world") ? "stats/world" : "countries"));
                             }
+                        } catch (Throwable e) {
+                            errorMsg = e.getMessage();
                         } finally {
                             if (conn != null) conn.disconnect();
                         }
-                    } catch (Throwable e) {
-                        errorMsg = e.getMessage();
                     }
                 }
 
@@ -910,7 +1019,7 @@ public final class VisitedCountriesManager {
         int total = uniqueCountries.size();
         List<WorldTour.City> missing = getMissingCountries(context);
         int missingCount = missing.size();
-        int visited = Math.max(0, total - missingCount);
+        int visited = Math.max(0, Math.min(total, total - missingCount));
 
         return new CountryStats(total, visited, missingCount, lastSyncTime, lastSyncSource);
     }

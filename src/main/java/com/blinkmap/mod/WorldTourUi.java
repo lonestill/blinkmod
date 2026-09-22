@@ -210,7 +210,7 @@ public final class WorldTourUi {
 
         // --- Speed Controls ---
         TextView speedLabel = new TextView(activity);
-        speedLabel.setText("Время в стране (для зачёта бэкендом Blink 5-10 сек):");
+        speedLabel.setText("Поездка на машине по стране (~50 км/ч, для зачёта 5-10 сек):");
         speedLabel.setTextSize(11);
         speedLabel.setTextColor(SECONDARY);
         card.addView(speedLabel);
@@ -295,8 +295,24 @@ public final class WorldTourUi {
         });
         card.addView(btnMissingTour);
 
-        // Action 1: ALL 250 COUNTRIES + 50 US STATES (RELIABLE: ~7.5 min at 1.5s)
-        View btnCountries = createActionButton(activity, "🌍 Все страны + 50 штатов (301 точка, надёжно)", PURPLE, new View.OnClickListener() {
+        // Action 0.5: SNIPER TOP-1 BOOST (42 sovereign guaranteed targets)
+        View btnTop1 = createActionButton(activity, "🏆 СНАЙПЕР ТОП-1 МИРА (42 страны)", GOLD, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                WorldTour.start(activity, WorldTour.MODE_TOP1_BOOST, currentDelay, new Runnable() {
+                    @Override
+                    public void run() {
+                        mainHandler.post(updateStatus);
+                    }
+                });
+                updateStatus.run();
+                Toast.makeText(activity, "Снайперский тур ТОП-1 запущен (42 страны)!", Toast.LENGTH_SHORT).show();
+            }
+        });
+        card.addView(btnTop1);
+
+        // Action 1: ALL 230 OFFICIAL COUNTRIES
+        View btnCountries = createActionButton(activity, "🌍 Все страны (230 точек базы Blink, надёжно)", PURPLE, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 WorldTour.start(activity, WorldTour.MODE_COUNTRIES_ONLY, currentDelay, new Runnable() {
@@ -306,7 +322,7 @@ public final class WorldTourUi {
                     }
                 });
                 updateStatus.run();
-                Toast.makeText(activity, "Надёжный тур по всем странам запущен!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, "Надёжный тур по 230 странам запущен!", Toast.LENGTH_SHORT).show();
             }
         });
         card.addView(btnCountries);

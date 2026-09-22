@@ -84,6 +84,28 @@ public final class StepHooks {
         location.setLatitude(getDriftLat(lat));
         location.setLongitude(getDriftLon(lon));
         location.setSpeed(getDriftSpeed(location.getSpeed()));
+        float bearing = getDriftBearing(location.getBearing());
+        if (bearing != 0.0f) {
+            location.setBearing(bearing);
+        }
+    }
+
+    public static boolean isSpoofingActive() {
+        if (driftMode != 0) return true;
+        if (customLat != 0.0) return true;
+        if (driftCurLat != 0.0) return true;
+        return false;
+    }
+
+    public static com.blinkmap.geography.core.LatLng hookUserLatLng(com.blinkmap.geography.core.LatLng latLng) {
+        return hookUserLatLng(latLng, true);
+    }
+
+    public static com.blinkmap.geography.core.LatLng hookUserLatLng(com.blinkmap.geography.core.LatLng latLng, boolean enabled) {
+        if (!enabled || !isSpoofingActive() || latLng == null) return latLng;
+        double lat = getDriftLat(0.0);
+        double lon = getDriftLon(0.0);
+        return new com.blinkmap.geography.core.LatLng(lat, lon);
     }
 
     public static void dispatchSyntheticLocation() {
@@ -96,7 +118,7 @@ public final class StepHooks {
             android.location.Location loc = new android.location.Location("fused");
             loc.setLatitude(lat);
             loc.setLongitude(lon);
-            loc.setAccuracy(5.0f);
+            loc.setAccuracy(3.5f);
             loc.setTime(System.currentTimeMillis());
             loc.setElapsedRealtimeNanos(android.os.SystemClock.elapsedRealtimeNanos());
             loc.setSpeed(getDriftSpeed(0.0f));

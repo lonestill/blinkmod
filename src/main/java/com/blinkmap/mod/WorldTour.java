@@ -231,30 +231,42 @@ public final class WorldTour {
                             } catch (Throwable ignored) {}
                         }
 
-                        // Multi-step walking simulation per country (requires 5-10s for Blink backend ingestion)
+                        // Multi-step car driving simulation per country (~50 km/h, switches Blink avatar to vehicle mode)
                         long dwell = delayMs >= 3000L ? delayMs : 6000L;
-                        int steps = Math.max(3, (int)(dwell / 1800L));
+                        int steps = Math.max(4, (int)(dwell / 1000L)); // 1 step per second like real GPS
                         long stepSleep = dwell / steps;
 
                         double curLat = city.lat;
                         double curLon = city.lon;
-                        float curBearing = 35.0f;
+                        float curBearing = (float)(Math.abs(city.name.hashCode()) % 360);
 
                         for (int step = 0; step < steps && running; step++) {
+                            // Realistic car driving speed: 48 - 54 km/h (~13.3 - 15.0 m/s)
+                            // Speed > 7 m/s triggers car/vehicle icon on Blink map avatar
+                            float speedKmh = 49.0f + (float)(Math.sin(step * 0.7) * 4.5);
+                            float stepSpeed = speedKmh / 3.6f;
+
                             StepHooks.customLat = curLat;
                             StepHooks.customLon = curLon;
                             StepHooks.driftCurLat = curLat;
                             StepHooks.driftCurLon = curLon;
-                            StepHooks.driftSpeed = 1.25f + (float)(step * 0.05);
+                            StepHooks.driftSpeed = stepSpeed;
                             StepHooks.driftBearing = curBearing;
                             StepHooks.dispatchSyntheticLocation();
 
                             Thread.sleep(stepSleep);
                             if (!running) break;
 
-                            curLat += 0.000040;
-                            curLon += 0.000030;
-                            curBearing = (curBearing + 14.0f) % 360.0f;
+                            // Real displacement at ~50 km/h: ~13-15 meters per second
+                            double distMeters = stepSpeed * (stepSleep / 1000.0);
+                            double rad = Math.toRadians(curBearing);
+                            double dLat = (distMeters * Math.cos(rad)) / 111139.0;
+                            double dLon = (distMeters * Math.sin(rad)) / (111139.0 * Math.max(0.15, Math.cos(Math.toRadians(curLat))));
+
+                            curLat += dLat;
+                            curLon += dLon;
+                            // Smooth road turning (~3.5 deg per second)
+                            curBearing = (float)((curBearing + 3.5f) % 360.0f);
                         }
                     }
                 } catch (InterruptedException ignored) {
