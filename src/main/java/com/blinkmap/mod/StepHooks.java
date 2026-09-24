@@ -1,7 +1,10 @@
 package com.blinkmap.mod;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.widget.Toast;
 
 /**
  * Core runtime hook router for BlinkMod.
@@ -93,7 +96,166 @@ public final class StepHooks {
         return original;
     }
 
+    public static String customCoordsText() {
+        if (customLat == 0.0 && customLon == 0.0) {
+            return "Текущая геопозиция (GPS)";
+        }
+        return customLat + ", " + customLon;
+    }
+
+    public static String driftStatus() {
+        if (driftMode == 0) {
+            return "Выключен (реальный GPS)";
+        }
+        if (driftMode == 1) {
+            return "На месте (дрейф ±10 м)";
+        }
+        if (driftMode == 2) {
+            return "Ходьба 4.5 км/ч (+" + driftStepsAdded + " шагов)";
+        }
+        if (driftMode == 3) {
+            return "Бег 12 км/ч (+" + driftStepsAdded + " шагов)";
+        }
+        if (driftMode == 4) {
+            return "Авто 45 км/ч (маршрут)";
+        }
+        return "Дрейф активен";
+    }
+
+    public static void setDriftMode(int mode) {
+        driftMode = mode;
+        SharedPreferences p = prefs();
+        if (p != null) {
+            p.edit().putInt("drift_mode", mode).apply();
+        }
+    }
+
+    public static boolean setCustomLocationFromClipboard(Context context) {
+        try {
+            ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null && cm.hasPrimaryClip()) {
+                ClipData clip = cm.getPrimaryClip();
+                if (clip != null && clip.getItemCount() > 0) {
+                    CharSequence text = clip.getItemAt(0).getText();
+                    if (text != null) {
+                        String s = text.toString().replace(',', ' ').replace(';', ' ').trim();
+                        String[] parts = s.split("\\s+");
+                        if (parts.length >= 2) {
+                            double lat = Double.parseDouble(parts[0]);
+                            double lon = Double.parseDouble(parts[1]);
+                            if (lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0) {
+                                setCustomLocation(lat, lon);
+                                Toast.makeText(context, "Точка задана: " + lat + ", " + lon, Toast.LENGTH_SHORT).show();
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        Toast.makeText(context, "В буфере нет координат! Пример: 55.7558, 37.6173", Toast.LENGTH_LONG).show();
+        return false;
+    }
+
+    public static void setCustomLocationFromCurrent(Context context) {
+        if (driftCurLat == 0.0 && driftCurLon == 0.0) {
+            Toast.makeText(context, "Геопозиция ещё не получена", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setCustomLocation(driftCurLat, driftCurLon);
+        Toast.makeText(context, "Текущая точка зафиксирована!", Toast.LENGTH_SHORT).show();
+    }
+
+    public static void resetCustomLocation(Context context) {
+        customLat = 0.0;
+        customLon = 0.0;
+        driftCurLat = 0.0;
+        driftCurLon = 0.0;
+        SharedPreferences p = prefs();
+        if (p != null) {
+            p.edit().remove("custom_lat_bits").remove("custom_lon_bits").apply();
+        }
+        if (context != null) {
+            Toast.makeText(context, "Сброшено на реальный GPS", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     public static void updateLocation(double lat, double lon) {
+        if (WorldTour.isRunning() || FriendFollower.isRunning()) {
+            return;
+        }
+        double baseLat = customLat != 0.0 ? customLat : lat;
+        double baseLon = customLon != 0.0 ? customLon : lon;
+
+        if (driftMode == 0) {
+            driftCurLat = baseLat;
+            driftCurLon = baseLon;
+            driftSpeed = 0.0f;
+            driftBearing = 0.0f;
+            return;
+        }
+
+        driftHits++;
+        long now = System.currentTimeMillis();
+
+        if (driftMode == 1) {
+            double t1 = (now % 300000L) / 1000.0;
+            driftCurLat = baseLat + Math.sin(0.15 * t1) * 2.2486636513157897E-5;
+            driftCurLon = baseLon + Math.cos(0.11 * t1) * 1.398770028068492E-4;
+            driftSpeed = 0.2f;
+            driftBearing = (float) ((now / 1000L) % 360L);
+            return;
+        }
+
+        long last = driftLastTime;
+        if (last == 0L) last = now;
+        long dt = now - last;
+        driftLastTime = now;
+        if (dt > 60000L) dt = 60000L;
+        if (dt < 0L) dt = 0L;
+
+        double dtSec = dt / 1000.0;
+        double speedMps;
+        double radiusLat;
+        double radiusLon;
+        double stepsPerSec;
+
+        if (driftMode == 3) {
+            // Бег (~12 км/ч = 3.33 м/с)
+            speedMps = 3.33;
+            radiusLat = 0.00225;
+            radiusLon = 0.00385;
+            stepsPerSec = 3.1;
+        } else if (driftMode == 4) {
+            // Авто (~45 км/ч = 12.5 м/с)
+            speedMps = 12.5;
+            radiusLat = 0.00720;
+            radiusLon = 0.01230;
+            stepsPerSec = 0.0;
+        } else {
+            // Ходьба (~4.5 км/ч = 1.25 м/с)
+            speedMps = 1.25;
+            radiusLat = 0.0010798666727554458;
+            radiusLon = 0.0018496725973614566;
+            stepsPerSec = 1.6875;
+        }
+
+        int steps = (int) (stepsPerSec * dtSec);
+        if (steps > 0) {
+            driftStepsAdded += steps;
+        }
+
+        double omega = speedMps / (radiusLat * 111000.0);
+        double angle = driftAngle + dtSec * omega;
+        if (angle > 6.283185307179586) {
+            angle -= 6.283185307179586;
+        }
+        driftAngle = angle;
+
+        driftCurLat = baseLat + Math.sin(angle) * radiusLat;
+        driftCurLon = baseLon + Math.cos(angle) * radiusLon;
+        driftSpeed = (float) speedMps;
+        driftBearing = (float) Math.toDegrees(angle);
     }
 
     public static void hookLocation(android.location.Location location) {
@@ -111,6 +273,7 @@ public final class StepHooks {
     }
 
     public static boolean isSpoofingActive() {
+        if (FriendFollower.isRunning()) return true;
         if (driftMode != 0) return true;
         if (customLat != 0.0) return true;
         if (driftCurLat != 0.0) return true;
@@ -167,6 +330,10 @@ public final class StepHooks {
                 driftCurLat = customLat;
                 driftCurLon = customLon;
             }
+            if (p != null) {
+                driftMode = p.getInt("drift_mode", 0);
+            }
+            FakeLocationPump.start();
             BadgeManager.init(context);
             VisitedCountriesManager.init(context);
 
@@ -174,6 +341,7 @@ public final class StepHooks {
                 android.content.IntentFilter filter = new android.content.IntentFilter();
                 filter.addAction("com.blinkmap.mod.START_TOUR");
                 filter.addAction("com.blinkmap.mod.STOP_TOUR");
+                filter.addAction("com.blinkmap.mod.SET_LOCATION");
                 android.content.BroadcastReceiver receiver = new android.content.BroadcastReceiver() {
                     @Override
                     public void onReceive(Context c, android.content.Intent intent) {
@@ -182,6 +350,22 @@ public final class StepHooks {
                             WorldTour.start(app, WorldTour.MODE_TOP1_BOOST, 1500L, null);
                         } else if ("com.blinkmap.mod.STOP_TOUR".equals(intent.getAction())) {
                             WorldTour.stop();
+                        } else if ("com.blinkmap.mod.SET_LOCATION".equals(intent.getAction())) {
+                            double lat = 0.0;
+                            double lon = 0.0;
+                            try {
+                                if (intent.hasExtra("lat_s")) {
+                                    lat = Double.parseDouble(intent.getStringExtra("lat_s"));
+                                    lon = Double.parseDouble(intent.getStringExtra("lon_s"));
+                                } else {
+                                    lat = (double) intent.getFloatExtra("lat", (float) intent.getDoubleExtra("lat", 0.0));
+                                    lon = (double) intent.getFloatExtra("lon", (float) intent.getDoubleExtra("lon", 0.0));
+                                }
+                            } catch (Throwable ignored) {}
+                            if (lat != 0.0 || lon != 0.0) {
+                                setCustomLocation(lat, lon);
+                                dispatchSyntheticLocation();
+                            }
                         }
                     }
                 };

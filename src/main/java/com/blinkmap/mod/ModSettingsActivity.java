@@ -1,164 +1,2226 @@
 package com.blinkmap.mod;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
-import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.net.Uri;
-import android.util.TypedValue;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.VelocityTracker;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
-import android.widget.CompoundButton;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
+import android.view.animation.PathInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.app.AlertDialog;
+import android.graphics.drawable.ColorDrawable;
+import android.text.InputType;
+import android.widget.EditText;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public final class ModSettingsActivity extends Activity {
-    private static final String PREFS="blinkmod_settings";
-    private static final String MAIN="main", UI="ui", MAP="map", PRIVACY="privacy", STEPS="steps", CHAT="chat", FRIENDS="friends", PROFILE="profile", USER="user", MISC="misc", NAVIGATE="navigate", CONFIG="config", LAB="lab", ABOUT="about";
-    private static final int BASE_BG=Color.rgb(11,11,13), PRIMARY=Color.WHITE;
-    private static final int SECONDARY=Color.rgb(148,148,156), DIVIDER=Color.rgb(46,46,51), PURPLE=Color.rgb(128,77,255);
-    private String page=MAIN;
-    private int devTaps=0;
-    private long lastTapTime=0;
+    private static final String PREFS = "blinkmod_settings";
 
-    @Override protected void onCreate(Bundle b){super.onCreate(b);setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);getWindow().setStatusBarColor(bg());getWindow().setNavigationBarColor(bg());render(MAIN);}
-    @Override public void onBackPressed(){if(MAIN.equals(page))finish();else render(MAIN);}
+    // Material Design 3 OLED Stealth / Titanium Monochrome Tokens
+    private static final int COLOR_SURFACE = 0xFF0D0E11;
+    private static final int COLOR_SURFACE_CONTAINER_LOW = 0xFF131418;
+    private static final int COLOR_SURFACE_CONTAINER = 0xFF18191F;
+    private static final int COLOR_SURFACE_CONTAINER_HIGH = 0xFF22242D;
+    private static final int COLOR_SURFACE_CONTAINER_HIGHEST = 0xFF2C2F3A;
+    private static final int COLOR_PRIMARY = 0xFFF0F1F5;
+    private static final int COLOR_ON_PRIMARY = 0xFF0E0F12;
+    private static final int COLOR_PRIMARY_CONTAINER = 0xFF2B2E38;
+    private static final int COLOR_ON_PRIMARY_CONTAINER = 0xFFF0F1F5;
+    private static final int COLOR_SECONDARY_CONTAINER = 0xFF20222A;
+    private static final int COLOR_ON_SURFACE = 0xFFEDEDF2;
+    private static final int COLOR_ON_SURFACE_VARIANT = 0xFF8A8D98;
+    private static final int COLOR_OUTLINE = 0xFF353844;
+    private static final int COLOR_OUTLINE_VARIANT = 0xFF1C1E25;
+    private static final int COLOR_DRAG_HANDLE = 0xFF4A4E5C;
+    private static final int COLOR_SWITCH_TRACK_OFF = 0xFF242630;
+    private static final int COLOR_SWITCH_THUMB_OFF = 0xFF6D7180;
+    private static final int COLOR_SUCCESS = 0xFF34D399;
+    private static final int COLOR_SCRIM = 0xD8000000;
 
-    private void render(final String target){
-        page=target;
-        getWindow().setStatusBarColor(bg());getWindow().setNavigationBarColor(bg());
-        final LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(bg());
-        final FrameLayout head=header(target);root.addView(head,new LinearLayout.LayoutParams(-1,-2));
-        ScrollView scroll=new ScrollView(this);scroll.setClipToPadding(false);
-        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);int side=compact()?dp(14):dp(20);body.setPadding(side,dp(6),side,dp(42));
-        if(MAIN.equals(target))main(body); else if(UI.equals(target))ui(body); else if(MAP.equals(target))map(body); else if(PRIVACY.equals(target))privacy(body); else if(STEPS.equals(target))steps(body); else if(CHAT.equals(target))chat(body); else if(FRIENDS.equals(target))friends(body); else if(PROFILE.equals(target))profile(body); else if(USER.equals(target))userLookup(body); else if(MISC.equals(target))misc(body); else if(NAVIGATE.equals(target))navigate(body); else if(CONFIG.equals(target))config(body); else if(LAB.equals(target))lab(body); else about(body);
-        scroll.addView(body,new ScrollView.LayoutParams(-1,-2));root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener(){@Override public WindowInsets onApplyWindowInsets(View v,WindowInsets i){int top=Build.VERSION.SDK_INT>=30?i.getInsets(WindowInsets.Type.statusBars()).top:i.getSystemWindowInsetTop();head.setPadding(dp(20),top+dp(8),dp(20),0);return i;}});
-        setContentView(root);if(getSharedPreferences(PREFS,0).getBoolean("animations",true)){root.setAlpha(.75f);root.setTranslationX(dp(MAIN.equals(target)?-10:14));root.animate().alpha(1).translationX(0).setDuration(170).start();}
-    }
+    // Tabs
+    private static final int TAB_BOOST = 0;
+    private static final int TAB_GHOST = 1;
+    private static final int TAB_PROFILE = 2;
+    private static final int TAB_LAB = 3;
 
-    private FrameLayout header(String p){
-        FrameLayout bar=new FrameLayout(this);bar.setPadding(dp(20),dp(8),dp(20),0);
-        TextView title=text(title(p),MAIN.equals(p)?34:29,PRIMARY);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);title.setGravity(Gravity.CENTER_VERTICAL);
-        FrameLayout.LayoutParams tp=new FrameLayout.LayoutParams(-1,dp(64));tp.rightMargin=dp(62);bar.addView(title,tp);
-        TextView action=text(MAIN.equals(p)?"×":"‹",MAIN.equals(p)?34:42,Color.rgb(177,177,184));action.setGravity(Gravity.CENTER);action.setBackground(round(Color.rgb(29,29,33),18));ripple(action);
-        action.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){if(MAIN.equals(page))finish();else render(MAIN);}});
-        FrameLayout.LayoutParams ap=new FrameLayout.LayoutParams(dp(48),dp(48));ap.gravity=Gravity.END|Gravity.CENTER_VERTICAL;bar.addView(action,ap);return bar;
-    }
+    private int activeTab = TAB_BOOST;
+    private FrameLayout rootLayout;
+    private View scrimView;
+    private LinearLayout sheetContainer;
+    private ScrollView scrollView;
+    private LinearLayout contentContainer;
+    private LinearLayout tabsRow;
+    private TextView[] tabButtons;
 
-    private void main(LinearLayout b){
-        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.setPadding(dp(4),dp(8),0,dp(22));brand.addView(appIcon(),new LinearLayout.LayoutParams(dp(52),dp(52)));LinearLayout bn=labels("BlinkMod",ModConfig.getVersionDisplay(this));bn.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){long now=System.currentTimeMillis();if(now-lastTapTime>2000)devTaps=0;lastTapTime=now;devTaps++;if(devTaps>=5){devTaps=0;boolean enabled=ModConfig.toggleDevMode(ModSettingsActivity.this);Toast.makeText(ModSettingsActivity.this,enabled?"⚡ Режим разработчика включён!":"🔒 Режим разработчика выключен",Toast.LENGTH_SHORT).show();render(MAIN);}}});LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,dp(52),1);bp.leftMargin=dp(15);brand.addView(bn,bp);b.addView(brand);
-        section(b,"ВОЗМОЖНОСТИ");LinearLayout features=group();features.addView(nav("Шаги","Быстрое действие и синхронизация",Icon.STEPS,STEPS));features.addView(line());features.addView(nav("Приватность","Геолокация и заряд батареи",Icon.SHIELD,PRIVACY));features.addView(line());features.addView(nav("Прочее","Чаты, друзья и профили",Icon.MISC,MISC));b.addView(features,bottom(22));
-        section(b,"ОФОРМЛЕНИЕ");LinearLayout look=group();look.addView(nav("Интерфейс","Тема и кнопка BlinkMod",Icon.UI,UI));b.addView(look,bottom(22));
-        section(b,"ИНСТРУМЕНТЫ");LinearLayout tools=group();if(ModConfig.isDevMode(this)){tools.addView(nav("Blink Lab","Проверка API и журнал",Icon.LAB,LAB));tools.addView(line());}tools.addView(nav("Навигация по ID","Открыть профиль, чат или маркер",Icon.NAVIGATE,NAVIGATE));tools.addView(line());tools.addView(nav("Конфигурация","Экспорт и восстановление настроек",Icon.CONFIG,CONFIG));tools.addView(line());tools.addView(nav("О BlinkMod","Версия и канал проекта",Icon.INFO,ABOUT));b.addView(tools,bottom(20));
-    }
+    private int devTaps = 0;
+    private long lastTapTime = 0;
+    private boolean isClosing = false;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private ImageView appIcon(){ImageView v=new ImageView(this);try{v.setImageDrawable(getPackageManager().getApplicationIcon(getPackageName()));}catch(Exception ignored){}v.setScaleType(ImageView.ScaleType.FIT_CENTER);return v;}
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        overridePendingTransition(0, 0);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
-    private void misc(LinearLayout b){section(b,"ПРОЧИЕ ИНСТРУМЕНТЫ");LinearLayout g=group();g.addView(nav("Чаты","Поиск, непрочитанные и chat ID",Icon.CHAT,CHAT));g.addView(line());g.addView(nav("Друзья","Топ друзей и account ID",Icon.FRIENDS,FRIENDS));g.addView(line());g.addView(nav("Мой профиль","Данные и статистика аккаунта",Icon.PROFILE,PROFILE));g.addView(line());g.addView(nav("Поиск пользователя","Профиль и статистика по username",Icon.USER,USER));b.addView(g,bottom(16));note(b,"Экспериментальные инструменты собраны отдельно и не мешают основным функциям мода.");}
-    private void ui(LinearLayout b){int tab=getSharedPreferences(PREFS,0).getInt("ui_tab",0);b.addView(tabs("Внешний вид","Кнопка","ui_tab",UI),bottom(22));if(tab==0){section(b,"ТЕМА И ПЛОТНОСТЬ");LinearLayout g=group();g.addView(toggle("AMOLED-режим","Чистый чёрный фон","amoled",true));g.addView(line());g.addView(toggle("Компактный режим","Меньше отступов и строки","compact",false));g.addView(line());g.addView(toggle("Анимации","Плавные переходы экранов","animations",true));b.addView(g,bottom(20));}else{section(b,"КНОПКА BLINKMOD");LinearLayout f=group();f.addView(toggle("Кнопка слева","Иначе остаётся справа","floating_left",false));f.addView(line());f.addView(choice("Размер","floating_size",new int[]{36,44,52},new String[]{"S","M","L"},44));f.addView(line());f.addView(choice("Прозрачность","floating_opacity",new int[]{60,80,90,100},new String[]{"60%","80%","90%","100%"},90));b.addView(f,bottom(16));note(b,"Кнопку можно перетаскивать по вертикали. Положение сохраняется.");}}
-    private void map(LinearLayout b){section(b,"КАРТА");LinearLayout g=group();g.addView(status("чистая карта","скрытие игр и промо-кнопок","в работе"));g.addView(line());g.addView(status("компактные маркеры","меньше перекрытий на карте","скоро"));g.addView(line());g.addView(status("быстрый масштаб","сохранять выбранное приближение","скоро"));b.addView(g,bottom(20));}
-    private void privacy(LinearLayout b){int tab=getSharedPreferences(PREFS,0).getInt("privacy_tab",0);b.addView(tabs("Геолокация","Батарея","privacy_tab",PRIVACY),bottom(22));if(tab==0){section(b,"ВЫБОР ТОЧКИ НА КАРТЕ");LinearLayout mp=group();TextView mpBtn=text("Выбрать координаты на карте",16,PRIMARY);mpBtn.setTypeface(Typeface.DEFAULT,Typeface.BOLD);mpBtn.setGravity(Gravity.CENTER);mpBtn.setMinimumHeight(dp(54));mpBtn.setBackground(round(PURPLE,16));mpBtn.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){MapPicker.showPicker();finish();}});ripple(mpBtn);mp.addView(mpBtn);b.addView(mp,bottom(16));note(b,"Открывает карту для интерактивного выбора точки спуфинга.");WorldTourUi.attach(b,this);section(b,"ТОЧНОСТЬ ПОЗИЦИИ");LinearLayout q=group();q.addView(locationPrecision());q.addView(line());q.addView(value("Сейчас",StepHooks.locationPrecisionStatus()));q.addView(line());q.addView(value("Округлено за запуск",String.valueOf(StepHooks.locationPrecisionHits)));b.addView(q,bottom(16));note(b,"Координаты округляются непосредственно перед отправкой, GPS телефона не изменяется.");section(b,"ЧАСТОТА ОБНОВЛЕНИЙ");LinearLayout z=group();z.addView(geoFrequency());z.addView(line());z.addView(value("Текущий режим",StepHooks.geoIntervalStatus()));z.addView(line());z.addView(value("Пропущено за запуск",String.valueOf(StepHooks.geoRateLimitHits)));b.addView(z,bottom(16));note(b,"Позиция обновляется, но промежуточные запросы не отправляются.");section(b,"ПОЛНАЯ ПАУЗА");LinearLayout p=group();p.addView(value("Состояние",StepHooks.pauseStatus()));p.addView(line());p.addView(pauseDurations());p.addView(line());p.addView(resumeLocation());p.addView(line());p.addView(value("Заблокировано за запуск",String.valueOf(StepHooks.locationBlockHits)));b.addView(p,bottom(16));note(b,"Пауза полностью блокирует новые POST /api/geo/android.");}else{section(b,"ПЕРЕДАВАЕМЫЙ ЗАРЯД");LinearLayout g=group();g.addView(chargeMode());g.addView(line());g.addView(toggle("Не отправлять заряд","Передаёт charge как null","hide_charge",false));g.addView(line());g.addView(value("Подменено за запуск",String.valueOf(StepHooks.chargeFilterHits)));b.addView(g,bottom(16));note(b,"Скрытие имеет приоритет над выбранным фиксированным значением.");}}
-    private void steps(LinearLayout b){int tab=getSharedPreferences(PREFS,0).getInt("steps_tab",0);b.addView(tabs("Быстро","Синхронизация","steps_tab",STEPS),bottom(22));if(tab==0){section(b,"БЫСТРОЕ ДЕЙСТВИЕ");b.addView(action100k(),bottom(16));note(b,"Запрос отправляется сразу и затем проверяется через API.");}else{section(b,"ШТАТНАЯ СИНХРОНИЗАЦИЯ");LinearLayout network=group();network.addView(toggle("Менять отправку","Правит шаги перед запросом Blink","network_steps_enabled",false));network.addView(line());network.addView(multiplier("Множитель отправки","network_steps_multiplier"));network.addView(line());network.addView(networkState());b.addView(network,bottom(16));note(b,"Применяется при следующей синхронизации. Максимум — 100 000 шагов.");}}
-    private void lab(LinearLayout b){section(b,"ВНУТРЕННИЙ API");b.addView(apiCheck(),bottom(14));LinearLayout g=group();g.addView(value2("состояние",getSharedPreferences(PREFS,0).getString("api_steps_state","Проверок ещё не было")));b.addView(g,bottom(22));section(b,"ДИАГНОСТИКА");b.addView(copyDiagnostics(),bottom(20));section(b,"ЛОКАЛЬНЫЙ ЖУРНАЛ");String log=getSharedPreferences(PREFS,0).getString("lab_log","");TextView journal=text(log.length()==0?"Событий пока нет":log,14,log.length()==0?SECONDARY:PRIMARY);journal.setGravity(Gravity.START);journal.setTypeface(Typeface.MONOSPACE);journal.setPadding(dp(16),dp(14),dp(16),dp(16));journal.setBackground(round(Color.rgb(25,25,29),16));b.addView(journal,bottom(12));b.addView(clearJournal(),bottom(12));note(b,"В журнал не записываются токен, Authorization и содержимое профиля.");}
-    private void chat(LinearLayout b){section(b,"ПОИСК ДИАЛОГОВ");b.addView(chatSearch(),bottom(14));LinearLayout state=group();state.addView(value("Состояние",getSharedPreferences(PREFS,0).getString("chat_state","Поиск ещё не запускался")));b.addView(state,bottom(22));section(b,"РЕЗУЛЬТАТЫ");String raw=getSharedPreferences(PREFS,0).getString("chat_results","");if(raw.length()==0){LinearLayout empty=group();empty.addView(value("Диалоги","Нет результатов"));b.addView(empty,bottom(16));}else{String[] rows=raw.split("\\n");LinearLayout results=group();for(int i=0;i<rows.length;i++){String[] parts=rows[i].split("\\t",-1);if(parts.length<3)continue;if(results.getChildCount()>0)results.addView(line());results.addView(chatRow(parts[0],parts[1],parts[2]));}b.addView(results,bottom(10));b.addView(copyBlock("Скопировать весь список",raw,"Список чатов скопирован"),bottom(16));}note(b,"Нажмите на строку для копирования chat ID, на стрелку — чтобы открыть чат.");}
-    private void friends(LinearLayout b){section(b,"ДРУЗЬЯ");b.addView(friendsRefresh(),bottom(14));LinearLayout state=group();state.addView(value("Состояние",getSharedPreferences(PREFS,0).getString("friends_state","Список ещё не загружался")));b.addView(state,bottom(22));section(b,"ТОП ДРУЗЕЙ");String raw=getSharedPreferences(PREFS,0).getString("friends_results","");if(raw.length()==0){LinearLayout empty=group();empty.addView(value("Список","Нет данных"));b.addView(empty,bottom(16));}else{String[] rows=raw.split("\\n");LinearLayout results=group();for(int i=0;i<rows.length;i++){String[] parts=rows[i].split("\\t",-1);if(parts.length<3)continue;if(results.getChildCount()>0)results.addView(line());results.addView(friendRow(parts[0],parts[1],parts[2]));}b.addView(results,bottom(10));b.addView(copyBlock("Скопировать весь список",raw,"Список друзей скопирован"),bottom(16));}note(b,"Нажмите на строку для копирования account ID, на стрелку — чтобы открыть профиль.");}
-
-    private void profile(LinearLayout b){section(b,"МОЙ АККАУНТ");b.addView(profileRefresh(),bottom(14));android.content.SharedPreferences p=getSharedPreferences(PREFS,0);LinearLayout state=group();state.addView(value("Состояние",p.getString("profile_state","Профиль ещё не загружался")));b.addView(state,bottom(22));section(b,"ДАННЫЕ ПРОФИЛЯ");LinearLayout info=group();info.addView(copyValue("Имя",p.getString("profile_name","—"),"Имя скопировано"));info.addView(line());String u=p.getString("profile_username","");info.addView(copyValue("Username",u.length()==0?"—":"@"+u,"Username скопирован"));info.addView(line());info.addView(copyValue("Account ID",p.getString("profile_account_id","—"),"Account ID скопирован"));info.addView(line());String bg=BadgeManager.getBadge(u,p.getString("profile_account_id",""));info.addView(copyValue("Бейдж",bg==null?"—":bg,"Бейдж скопирован"));b.addView(info,bottom(20));section(b,"СТАТИСТИКА");LinearLayout stats=group();stats.addView(value("Друзья",String.valueOf(p.getLong("profile_friends",0))));stats.addView(line());stats.addView(value("Просмотры профиля",String.valueOf(p.getLong("profile_views",0))));stats.addView(line());stats.addView(value("Звёзды",String.valueOf(p.getLong("profile_stars",0))));stats.addView(line());stats.addView(value("Чекины",String.valueOf(p.getLong("profile_checkins",0))));b.addView(stats,bottom(10));b.addView(copyProfileCard(false),bottom(16));note(b,"Строку можно нажать, чтобы скопировать значение.");}
-    private void userLookup(LinearLayout b){section(b,"ПОИСК ПО USERNAME");b.addView(userSearch(),bottom(14));android.content.SharedPreferences p=getSharedPreferences(PREFS,0);LinearLayout state=group();state.addView(value("Поиск",p.getString("user_lookup_state","Ещё не запускался")));state.addView(line());state.addView(value("Доступность",p.getString("username_check_state","Ещё не проверялась")));b.addView(state,bottom(22));section(b,"ПРОФИЛЬ");LinearLayout info=group();info.addView(copyValue("Имя",emptyDash(p.getString("user_lookup_name","")),"Имя скопировано"));info.addView(line());String u=p.getString("user_lookup_username","");info.addView(copyValue("Username",u.length()==0?"—":"@"+u,"Username скопирован"));info.addView(line());info.addView(copyValue("Город",emptyDash(p.getString("user_lookup_city","")),"Город скопирован"));info.addView(line());info.addView(copyValue("Account ID",emptyDash(p.getString("user_lookup_id","")),"Account ID скопирован"));info.addView(line());String bg=BadgeManager.getBadge(u,p.getString("user_lookup_id",""));info.addView(copyValue("Бейдж",bg==null?"—":bg,"Бейдж скопирован"));b.addView(info,bottom(12));String id=p.getString("user_lookup_id","");if(id.length()>0)b.addView(nativeOpen("Открыть профиль в Blink","blink:///profile/?id="+id),bottom(20));section(b,"ПУБЛИЧНАЯ СТАТИСТИКА");LinearLayout stats=group();stats.addView(value("Друзья",String.valueOf(p.getLong("user_lookup_friends",0))));stats.addView(line());stats.addView(value("Просмотры",String.valueOf(p.getLong("user_lookup_views",0))));stats.addView(line());stats.addView(value("Звёзды",String.valueOf(p.getLong("user_lookup_stars",0))));stats.addView(line());stats.addView(value("Чекины",String.valueOf(p.getLong("user_lookup_checkins",0))));b.addView(stats,bottom(10));b.addView(copyProfileCard(true),bottom(16));}
-    private void navigate(LinearLayout b){section(b,"ВНУТРЕННИЙ ID");b.addView(navigationPanel(),bottom(16));note(b,"Открывает штатные экраны Blink через внутренние deep link. Поддерживаются числовые ID и UUID.");section(b,"ПОДДЕРЖИВАЕМЫЕ ЭКРАНЫ");LinearLayout g=group();g.addView(value("Профиль","account ID"));g.addView(line());g.addView(value("Чат","chat ID"));g.addView(line());g.addView(value("Маркер","marker ID"));b.addView(g,bottom(16));}
-    private void config(LinearLayout b){section(b,"РЕЗЕРВНАЯ КОПИЯ");LinearLayout actions=group();actions.addView(configAction("Скопировать конфигурацию","Только настройки мода, без данных аккаунта",true));actions.addView(line());actions.addView(configAction("Восстановить из буфера","Применить ранее скопированную конфигурацию",false));actions.addView(line());actions.addView(clearInspectorData());b.addView(actions,bottom(16));note(b,"Экспорт не содержит токен, переписки, имена, ID или геолокацию.");section(b,"СОСТОЯНИЕ");LinearLayout state=group();state.addView(value("Последнее действие",getSharedPreferences(PREFS,0).getString("config_state","Резервных копий ещё не было")));b.addView(state,bottom(16));}
-    private void about(LinearLayout b){ImageView icon=appIcon();LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(dp(92),dp(92));ip.gravity=Gravity.CENTER_HORIZONTAL;ip.topMargin=dp(28);b.addView(icon,ip);TextView name=text("BlinkMod",30,PRIMARY);name.setTypeface(Typeface.DEFAULT,Typeface.BOLD);name.setGravity(Gravity.CENTER);name.setPadding(0,dp(14),0,0);b.addView(name);TextView version=text("версия 1.1",15,SECONDARY);version.setGravity(Gravity.CENTER);version.setPadding(0,dp(3),0,dp(34));b.addView(version);b.addView(channelButton(),bottom(16));TextView channel=text("обновления и новые сборки",13,SECONDARY);channel.setGravity(Gravity.CENTER);b.addView(channel);}
-
-    private View nav(String a,String s,int icon,final String target){int h=compact()?58:70;LinearLayout r=new LinearLayout(this);r.setGravity(Gravity.CENTER_VERTICAL);r.setPadding(0,dp(3),0,dp(3));Icon iv=new Icon(icon);r.addView(iv,new LinearLayout.LayoutParams(dp(58),dp(h)));LinearLayout labels=labels(a,s);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(h),1);lp.leftMargin=dp(compact()?4:10);r.addView(labels,lp);TextView arrow=text("›",31,SECONDARY);arrow.setGravity(Gravity.CENTER);r.addView(arrow,new LinearLayout.LayoutParams(dp(32),dp(h)));r.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){render(target);}});ripple(r);return r;}
-    private View tabs(String left,String right,final String key,final String target){final LinearLayout bar=new LinearLayout(this);bar.setPadding(dp(5),dp(5),dp(5),dp(5));bar.setBackground(round(Color.rgb(29,29,33),18));int selected=getSharedPreferences(PREFS,0).getInt(key,0);String[] names={left,right};for(int i=0;i<2;i++){final int value=i;TextView tab=text(names[i],15,selected==i?PRIMARY:SECONDARY);tab.setTypeface(Typeface.DEFAULT,Typeface.BOLD);tab.setGravity(Gravity.CENTER);if(selected==i)tab.setBackground(round(PURPLE,14));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(46),1);if(i>0)lp.leftMargin=dp(5);bar.addView(tab,lp);tab.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){getSharedPreferences(PREFS,0).edit().putInt(key,value).apply();render(target);}});ripple(tab);}return bar;}
-    private View toggle(String a,String s,final String key,boolean def){LinearLayout r=row();r.addView(labels(a,s),new LinearLayout.LayoutParams(0,dp(compact()?58:70),1));final Switch sw=new Switch(this);int[][] st={{android.R.attr.state_checked},{}};sw.setThumbTintList(new ColorStateList(st,new int[]{Color.WHITE,SECONDARY}));sw.setTrackTintList(new ColorStateList(st,new int[]{PURPLE,Color.rgb(64,64,68)}));sw.setChecked(getSharedPreferences(PREFS,0).getBoolean(key,def));sw.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){@Override public void onCheckedChanged(CompoundButton b,boolean c){getSharedPreferences(PREFS,0).edit().putBoolean(key,c).apply();if("hide_charge".equals(key))StepHooks.setHideCharge(c);if("pause_location".equals(key))StepHooks.setPauseLocation(c);if("amoled".equals(key)||"compact".equals(key))render(UI);}});r.addView(sw,new LinearLayout.LayoutParams(dp(64),dp(52)));r.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){sw.setChecked(!sw.isChecked());}});ripple(r);return r;}
-    private View choice(String title,final String key,int[] values,String[] labels,int def){LinearLayout r=row();r.setOrientation(LinearLayout.VERTICAL);r.setGravity(Gravity.START);TextView label=text(title,16,PRIMARY);label.setTypeface(Typeface.DEFAULT,Typeface.BOLD);r.addView(label,new LinearLayout.LayoutParams(-1,dp(34)));LinearLayout choices=new LinearLayout(this);choices.setGravity(Gravity.CENTER_VERTICAL);int selected=getSharedPreferences(PREFS,0).getInt(key,def);for(int i=0;i<values.length;i++){final int value=values[i];final TextView x=text(labels[i],15,PRIMARY);x.setGravity(Gravity.CENTER);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setBackground(round(selected==value?PURPLE:Color.rgb(47,47,51),13));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(0,dp(42),1);if(i!=0)xp.leftMargin=dp(8);choices.addView(x,xp);x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){getSharedPreferences(PREFS,0).edit().putInt(key,value).apply();render(UI);}});}r.addView(choices,new LinearLayout.LayoutParams(-1,dp(42)));r.setPadding(dp(16),dp(12),dp(16),dp(14));return r;}
-    private View status(String a,String s,String badge){LinearLayout r=row();r.addView(labels(a,s),new LinearLayout.LayoutParams(0,dp(70),1));TextView x=text(badge,13,SECONDARY);x.setGravity(Gravity.CENTER);x.setPadding(dp(11),0,dp(11),0);x.setBackground(round(Color.rgb(47,47,51),14));r.addView(x,new LinearLayout.LayoutParams(-2,dp(34)));return r;}
-    private View value(String a,String b){LinearLayout r=row();TextView l=text(a,17,PRIMARY);l.setTypeface(Typeface.DEFAULT,Typeface.BOLD);r.addView(l,new LinearLayout.LayoutParams(0,dp(62),1));TextView x=text(b,15,SECONDARY);x.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);r.addView(x,new LinearLayout.LayoutParams(-2,dp(62)));return r;}
-    private View multiplier(String title,final String key){LinearLayout r=row();r.setOrientation(LinearLayout.VERTICAL);r.setGravity(Gravity.START);TextView label=text(title,16,PRIMARY);label.setTypeface(Typeface.DEFAULT,Typeface.BOLD);r.addView(label,new LinearLayout.LayoutParams(-1,dp(34)));LinearLayout choices=new LinearLayout(this);choices.setGravity(Gravity.CENTER_VERTICAL);final int[] values={1,2,5,10};for(final int n:values){final TextView x=text("×"+n,15,PRIMARY);x.setGravity(Gravity.CENTER);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setBackground(round(getSharedPreferences(PREFS,0).getInt(key,2)==n?PURPLE:Color.rgb(47,47,51),13));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(0,dp(42),1);if(n!=1)xp.leftMargin=dp(8);choices.addView(x,xp);x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){getSharedPreferences(PREFS,0).edit().putInt(key,n).apply();render(STEPS);}});}r.addView(choices,new LinearLayout.LayoutParams(-1,dp(42)));r.setPadding(dp(18),dp(14),dp(18),dp(16));return r;}
-    private View networkState(){String sub=getSharedPreferences(PREFS,0).getString("api_steps_state","Запросов из BlinkMod ещё не было");return value2("последний запрос",sub);}
-    private View action100k(){TextView x=text("Поставить 100 000 шагов",17,PRIMARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(62));x.setBackground(round(PURPLE,20));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){try{long now=System.currentTimeMillis();String iso=new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX",java.util.Locale.US).format(new java.util.Date(now));StepHooks.onApiStarted();Class<?> c=Class.forName("com.blinkmap.mod.WorkBridge");c.getMethod("post100k",android.content.Context.class,Long.TYPE,String.class).invoke(null,getApplicationContext(),now,iso);Toast.makeText(ModSettingsActivity.this,"Запрос отправляется",Toast.LENGTH_SHORT).show();v.postDelayed(new Runnable(){@Override public void run(){render(STEPS);}},2200);v.postDelayed(new Runnable(){@Override public void run(){render(STEPS);}},5500);}catch(Throwable e){StepHooks.onApiError(e);Toast.makeText(ModSettingsActivity.this,"Не удалось отправить: "+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();render(STEPS);}}});ripple(x);return x;}
-    private View apiCheck(){TextView x=text("Проверить подключение",17,PRIMARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(58));x.setBackground(round(PURPLE,18));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){try{StepHooks.onApiCheckStarted();Class<?> c=Class.forName("com.blinkmap.mod.WorkBridge");c.getMethod("verifyNow",android.content.Context.class).invoke(null,getApplicationContext());render(LAB);v.postDelayed(new Runnable(){@Override public void run(){render(LAB);}},1800);}catch(Throwable e){StepHooks.onApiVerifyError(e);render(LAB);}}});ripple(x);return x;}
-    private View chatSearch(){LinearLayout box=group();box.setPadding(dp(14),dp(14),dp(14),dp(14));final EditText input=new EditText(this);input.setSingleLine(true);input.setHint("Название или имя");input.setHintTextColor(SECONDARY);input.setTextColor(PRIMARY);input.setTextSize(16);input.setText(getSharedPreferences(PREFS,0).getString("chat_query",""));input.setPadding(dp(14),0,dp(14),0);input.setBackground(round(Color.rgb(47,47,51),14));box.addView(input,new LinearLayout.LayoutParams(-1,dp(52)));TextView go=text("Найти чаты",16,PRIMARY);go.setTypeface(Typeface.DEFAULT,Typeface.BOLD);go.setGravity(Gravity.CENTER);go.setBackground(round(PURPLE,15));LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,dp(52));gp.topMargin=dp(10);box.addView(go,gp);go.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){String query=input.getText().toString().trim();StepHooks.onChatSearchStarted(query);try{Class<?> c=Class.forName("com.blinkmap.mod.WorkBridge");c.getMethod("searchChats",android.content.Context.class,String.class).invoke(null,getApplicationContext(),query);render(CHAT);v.postDelayed(new Runnable(){@Override public void run(){render(CHAT);}},1600);}catch(Throwable e){StepHooks.onChatSearchError(e);render(CHAT);}}});ripple(go);return box;}
-    private View chatRow(String name,final String id,String unread){LinearLayout r=row();String title=name.length()==0?"Без названия":name;LinearLayout info=labels(title,"ID "+id);r.addView(info,new LinearLayout.LayoutParams(0,dp(70),1));TextView badge=text("0".equals(unread)?"":"+"+unread,14,PRIMARY);badge.setTypeface(Typeface.DEFAULT,Typeface.BOLD);badge.setGravity(Gravity.CENTER);if(badge.getText().length()>0)badge.setBackground(round(PURPLE,13));r.addView(badge,new LinearLayout.LayoutParams(dp(44),dp(34)));TextView open=text("↗",21,SECONDARY);open.setGravity(Gravity.CENTER);open.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){openBlink("blink:///chat/?chatId="+id);}});r.addView(open,new LinearLayout.LayoutParams(dp(38),dp(42)));r.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(android.content.ClipData.newPlainText("Blink chat ID",id));Toast.makeText(ModSettingsActivity.this,"Chat ID скопирован",Toast.LENGTH_SHORT).show();}});ripple(r);return r;}
-    private View navigationPanel(){LinearLayout box=group();box.setPadding(dp(14),dp(14),dp(14),dp(14));final EditText input=new EditText(this);input.setSingleLine(true);input.setHint("ID или UUID");input.setHintTextColor(SECONDARY);input.setTextColor(PRIMARY);input.setTextSize(16);input.setText(getSharedPreferences(PREFS,0).getString("nav_id",""));input.setPadding(dp(14),0,dp(14),0);input.setBackground(round(Color.rgb(47,47,51),14));box.addView(input,new LinearLayout.LayoutParams(-1,dp(52)));LinearLayout buttons=new LinearLayout(this);String[] labels={"Профиль","Чат","Маркер"};final String[] links={"blink:///profile/?id=","blink:///chat/?chatId=","blink:///map/marker/?id="};for(int i=0;i<labels.length;i++){final int n=i;TextView x=text(labels[i],14,PRIMARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setBackground(round(i==0?PURPLE:Color.rgb(47,47,51),13));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(46),1);if(i>0)lp.leftMargin=dp(7);buttons.addView(x,lp);x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){String id=input.getText().toString().trim();if(id.length()==0){Toast.makeText(ModSettingsActivity.this,"Введите ID",Toast.LENGTH_SHORT).show();return;}getSharedPreferences(PREFS,0).edit().putString("nav_id",id).apply();openBlink(links[n]+Uri.encode(id));}});ripple(x);}LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(46));bp.topMargin=dp(10);box.addView(buttons,bp);return box;}
-    private View copyProfileCard(final boolean lookup){TextView x=text("Скопировать карточку профиля",15,SECONDARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(50));x.setBackground(round(Color.rgb(35,35,39),16));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){android.content.SharedPreferences p=getSharedPreferences(PREFS,0);String k=lookup?"user_lookup_":"profile_";String name=p.getString(k+"name","");String username=p.getString(k+"username","");String id=p.getString(k+(lookup?"id":"account_id"),"");StringBuilder card=new StringBuilder();if(name.length()>0)card.append(name).append('\n');if(username.length()>0)card.append('@').append(username).append('\n');card.append("account_id: ").append(id).append('\n').append("friends: ").append(p.getLong(k+"friends",0)).append(" | views: ").append(p.getLong(k+"views",0)).append(" | stars: ").append(p.getLong(k+"stars",0)).append(" | checkins: ").append(p.getLong(k+"checkins",0));if(id.length()>0)card.append('\n').append("blink:///profile/?id=").append(id);android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(android.content.ClipData.newPlainText("Blink profile",card.toString()));Toast.makeText(ModSettingsActivity.this,"Карточка скопирована",Toast.LENGTH_SHORT).show();}});ripple(x);return x;}
-    private View nativeOpen(String label,final String uri){TextView x=text(label,16,PRIMARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(54));x.setBackground(round(Color.rgb(35,35,39),16));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){openBlink(uri);}});ripple(x);return x;}
-    private void openBlink(String uri){try{Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse(uri));i.setPackage(getPackageName());startActivity(i);}catch(Throwable e){Toast.makeText(this,"Не удалось открыть экран Blink",Toast.LENGTH_SHORT).show();}}
-    private View userSearch(){LinearLayout box=group();box.setPadding(dp(14),dp(14),dp(14),dp(14));final EditText input=new EditText(this);input.setSingleLine(true);input.setHint("username");input.setHintTextColor(SECONDARY);input.setTextColor(PRIMARY);input.setTextSize(16);input.setText(getSharedPreferences(PREFS,0).getString("user_lookup_query",""));input.setPadding(dp(14),0,dp(14),0);input.setBackground(round(Color.rgb(47,47,51),14));box.addView(input,new LinearLayout.LayoutParams(-1,dp(52)));TextView go=text("Найти пользователя",16,PRIMARY);go.setTypeface(Typeface.DEFAULT,Typeface.BOLD);go.setGravity(Gravity.CENTER);go.setBackground(round(PURPLE,15));LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,dp(52));gp.topMargin=dp(10);box.addView(go,gp);go.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){String q=cleanUsername(input.getText().toString());if(q.length()==0){Toast.makeText(ModSettingsActivity.this,"Введите username",Toast.LENGTH_SHORT).show();return;}StepHooks.onUserLookupStarted(q);try{Class<?> c=Class.forName("com.blinkmap.mod.WorkBridge");c.getMethod("lookupUser",android.content.Context.class,String.class).invoke(null,getApplicationContext(),q);render(USER);v.postDelayed(new Runnable(){@Override public void run(){render(USER);}},1600);}catch(Throwable e){StepHooks.onUserLookupError(e);render(USER);}}});ripple(go);TextView check=text("Проверить доступность",15,PRIMARY);check.setTypeface(Typeface.DEFAULT,Typeface.BOLD);check.setGravity(Gravity.CENTER);check.setBackground(round(Color.rgb(47,47,51),15));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(48));cp.topMargin=dp(8);box.addView(check,cp);check.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){String q=cleanUsername(input.getText().toString());if(q.length()==0){Toast.makeText(ModSettingsActivity.this,"Введите username",Toast.LENGTH_SHORT).show();return;}StepHooks.onUsernameCheckStarted(q);try{Class<?> c=Class.forName("com.blinkmap.mod.WorkBridge");c.getMethod("checkUsername",android.content.Context.class,String.class).invoke(null,getApplicationContext(),q);render(USER);v.postDelayed(new Runnable(){@Override public void run(){render(USER);}},1400);}catch(Throwable e){StepHooks.onUsernameCheckError(e);render(USER);}}});ripple(check);return box;}
-    private String cleanUsername(String raw){String q=raw==null?"":raw.trim();while(q.startsWith("@"))q=q.substring(1);return q;}
-    private String emptyDash(String s){return s==null||s.length()==0?"—":s;}
-    private View copyDiagnostics(){TextView x=text("Скопировать отчёт для поддержки",16,PRIMARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(56));x.setBackground(round(Color.rgb(35,35,39),16));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(android.content.ClipData.newPlainText("BlinkMod diagnostics",diagnostics()));Toast.makeText(ModSettingsActivity.this,"Безопасный отчёт скопирован",Toast.LENGTH_SHORT).show();}});ripple(x);return x;}
-    private String diagnostics(){android.content.SharedPreferences p=getSharedPreferences(PREFS,0);String version="?";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Throwable ignored){}return "BlinkMod 1.0\nAPK "+version+" | Android "+Build.VERSION.SDK_INT+"\nsteps="+p.getBoolean("network_steps_enabled",false)+" x"+p.getInt("network_steps_multiplier",2)+"\ncharge_hidden="+p.getBoolean("hide_charge",false)+" forced="+p.getInt("forced_charge",-1)+"\nlocation_pause="+StepHooks.pauseStatus()+" precision="+StepHooks.locationPrecisionStatus()+" interval="+StepHooks.geoIntervalStatus()+"\nchat="+p.getString("chat_state","not_run")+"\nfriends="+p.getString("friends_state","not_run")+"\nprofile="+p.getString("profile_state","not_run")+"\nhits: location="+StepHooks.locationBlockHits+", rate="+StepHooks.geoRateLimitHits+", precision="+StepHooks.locationPrecisionHits+", charge="+StepHooks.chargeFilterHits;}
-    private View clearInspectorData(){LinearLayout r=row();r.addView(labels("Очистить данные инспекторов","Удалить сохранённые чаты, друзей и профиль"),new LinearLayout.LayoutParams(0,dp(70),1));TextView x=text("×",25,SECONDARY);x.setGravity(Gravity.CENTER);r.addView(x,new LinearLayout.LayoutParams(dp(42),dp(42)));r.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){getSharedPreferences(PREFS,0).edit().remove("chat_query").remove("chat_results").remove("chat_state").remove("friends_results").remove("friends_state").remove("profile_name").remove("profile_username").remove("profile_account_id").remove("profile_state").remove("profile_friends").remove("profile_views").remove("profile_stars").remove("profile_checkins").remove("user_lookup_query").remove("user_lookup_name").remove("user_lookup_username").remove("user_lookup_city").remove("user_lookup_id").remove("user_lookup_state").remove("user_lookup_friends").remove("user_lookup_views").remove("user_lookup_stars").remove("user_lookup_checkins").remove("username_check_state").putString("config_state","Данные инспекторов очищены").apply();Toast.makeText(ModSettingsActivity.this,"Сохранённые данные удалены",Toast.LENGTH_SHORT).show();render(CONFIG);}});ripple(r);return r;}
-    private View configAction(String title,String sub,final boolean export){LinearLayout r=row();r.addView(labels(title,sub),new LinearLayout.LayoutParams(0,dp(70),1));TextView arrow=text(export?"↑":"↓",24,SECONDARY);arrow.setGravity(Gravity.CENTER);r.addView(arrow,new LinearLayout.LayoutParams(dp(42),dp(42)));r.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){if(export){String data=exportConfig();android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(android.content.ClipData.newPlainText("BlinkMod config",data));getSharedPreferences(PREFS,0).edit().putString("config_state","Конфигурация скопирована").apply();Toast.makeText(ModSettingsActivity.this,"Конфигурация скопирована",Toast.LENGTH_SHORT).show();}else{try{android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);android.content.ClipData clip=cm.getPrimaryClip();String data=clip==null||clip.getItemCount()==0?"":String.valueOf(clip.getItemAt(0).coerceToText(ModSettingsActivity.this));if(importConfig(data)){StepHooks.init(getApplicationContext());Toast.makeText(ModSettingsActivity.this,"Настройки восстановлены",Toast.LENGTH_SHORT).show();}else Toast.makeText(ModSettingsActivity.this,"В буфере нет конфигурации BlinkMod",Toast.LENGTH_LONG).show();}catch(Throwable e){getSharedPreferences(PREFS,0).edit().putString("config_state","Ошибка импорта").apply();}}render(CONFIG);}});ripple(r);return r;}
-    private String exportConfig(){android.content.SharedPreferences p=getSharedPreferences(PREFS,0);StringBuilder s=new StringBuilder("BLINKMOD_CONFIG_1\n");String[] bools={"amoled","compact","animations","floating_left","network_steps_enabled","hide_charge"};boolean[] defs={true,false,true,false,false,false};for(int i=0;i<bools.length;i++)s.append(bools[i]).append('=').append(p.getBoolean(bools[i],defs[i])?'1':'0').append('\n');String[] ints={"floating_size","floating_opacity","network_steps_multiplier","forced_charge","geo_interval_minutes","location_precision"};int[] idefs={44,90,2,-1,0,0};for(int i=0;i<ints.length;i++)s.append(ints[i]).append('=').append(p.getInt(ints[i],idefs[i])).append('\n');return s.toString();}
-    private boolean importConfig(String data){if(data==null||!data.startsWith("BLINKMOD_CONFIG_1\n"))return false;android.content.SharedPreferences.Editor e=getSharedPreferences(PREFS,0).edit();String[] lines=data.split("\n");for(String line:lines){int at=line.indexOf('=');if(at<1)continue;String k=line.substring(0,at),v=line.substring(at+1);if("amoled".equals(k)||"compact".equals(k)||"animations".equals(k)||"floating_left".equals(k)||"network_steps_enabled".equals(k)||"hide_charge".equals(k))e.putBoolean(k,"1".equals(v));else try{int n=Integer.parseInt(v);if("floating_size".equals(k))e.putInt(k,Math.max(36,Math.min(52,n)));else if("floating_opacity".equals(k))e.putInt(k,Math.max(60,Math.min(100,n)));else if("network_steps_multiplier".equals(k))e.putInt(k,Math.max(1,Math.min(10,n)));else if("forced_charge".equals(k))e.putInt(k,Math.max(-1,Math.min(100,n)));else if("geo_interval_minutes".equals(k))e.putInt(k,n==5||n==15||n==30?n:0);else if("location_precision".equals(k))e.putInt(k,n==2||n==3?n:0);}catch(NumberFormatException ignored){}}e.putString("config_state","Конфигурация восстановлена").apply();return true;}
-
-    private View profileRefresh(){TextView go=text("Обновить данные профиля",16,PRIMARY);go.setTypeface(Typeface.DEFAULT,Typeface.BOLD);go.setGravity(Gravity.CENTER);go.setMinimumHeight(dp(56));go.setBackground(round(PURPLE,16));go.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){StepHooks.onProfileStarted();try{Class<?> c=Class.forName("com.blinkmap.mod.WorkBridge");c.getMethod("loadMyProfile",android.content.Context.class).invoke(null,getApplicationContext());render(PROFILE);v.postDelayed(new Runnable(){@Override public void run(){render(PROFILE);}},1600);}catch(Throwable e){StepHooks.onProfileError(e);render(PROFILE);}}});ripple(go);return go;}
-    private View copyValue(String label,final String data,final String toast){View r=value(label,data);r.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){if("—".equals(data))return;android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(android.content.ClipData.newPlainText("BlinkMod",data));Toast.makeText(ModSettingsActivity.this,toast,Toast.LENGTH_SHORT).show();}});ripple(r);return r;}
-    private View copyBlock(String label,final String data,final String toast){TextView x=text(label,15,SECONDARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(50));x.setBackground(round(Color.rgb(35,35,39),16));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(android.content.ClipData.newPlainText("BlinkMod list",data));Toast.makeText(ModSettingsActivity.this,toast,Toast.LENGTH_SHORT).show();}});ripple(x);return x;}
-    private View friendsRefresh(){TextView go=text("Обновить топ друзей",16,PRIMARY);go.setTypeface(Typeface.DEFAULT,Typeface.BOLD);go.setGravity(Gravity.CENTER);go.setMinimumHeight(dp(56));go.setBackground(round(PURPLE,16));go.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){StepHooks.onFriendsStarted();try{Class<?> c=Class.forName("com.blinkmap.mod.WorkBridge");c.getMethod("loadTopFriends",android.content.Context.class).invoke(null,getApplicationContext());render(FRIENDS);v.postDelayed(new Runnable(){@Override public void run(){render(FRIENDS);}},1600);}catch(Throwable e){StepHooks.onFriendsError(e);render(FRIENDS);}}});ripple(go);return go;}
-    private View friendRow(String name,String username,final String id){LinearLayout r=row();String title=name.length()==0?(username.length()==0?"Без имени":username):name;String sub=(username.length()==0?"":"@"+username+" · ")+"ID "+id;LinearLayout info=labels(title,sub);r.addView(info,new LinearLayout.LayoutParams(0,dp(70),1));TextView copy=text("↗",22,SECONDARY);copy.setGravity(Gravity.CENTER);copy.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){openBlink("blink:///profile/?id="+id);}});r.addView(copy,new LinearLayout.LayoutParams(dp(42),dp(42)));r.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(android.content.ClipData.newPlainText("Blink account ID",id));Toast.makeText(ModSettingsActivity.this,"Account ID скопирован",Toast.LENGTH_SHORT).show();}});ripple(r);return r;}
-    private View clearJournal(){TextView x=text("Очистить журнал",15,SECONDARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(50));x.setBackground(round(Color.rgb(35,35,39),16));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){StepHooks.clearLog();render(LAB);}});ripple(x);return x;}
-    private View pauseDurations(){LinearLayout r=row();r.setOrientation(LinearLayout.VERTICAL);r.setGravity(Gravity.START);TextView label=text("приостановить на",16,PRIMARY);label.setTypeface(Typeface.DEFAULT,Typeface.BOLD);r.addView(label,new LinearLayout.LayoutParams(-1,dp(34)));LinearLayout choices=new LinearLayout(this);choices.setGravity(Gravity.CENTER_VERTICAL);final long[] ms={15*60*1000L,60*60*1000L};String[] names={"15 минут","1 час"};for(int i=0;i<2;i++){final long duration=ms[i];TextView x=text(names[i],15,PRIMARY);x.setGravity(Gravity.CENTER);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setBackground(round(Color.rgb(47,47,51),13));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(0,dp(44),1);if(i>0)xp.leftMargin=dp(8);choices.addView(x,xp);x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){StepHooks.pauseFor(duration);render(PRIVACY);}});}TextView forever=text("∞",22,PRIMARY);forever.setGravity(Gravity.CENTER);forever.setTypeface(Typeface.DEFAULT,Typeface.BOLD);forever.setBackground(round(Color.rgb(47,47,51),13));LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(dp(66),dp(44));fp.leftMargin=dp(8);choices.addView(forever,fp);forever.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){StepHooks.setPauseLocation(true);render(PRIVACY);}});r.addView(choices,new LinearLayout.LayoutParams(-1,dp(44)));r.setPadding(dp(16),dp(12),dp(16),dp(14));return r;}
-    private View resumeLocation(){TextView x=text("Возобновить отправку",15,PRIMARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(50));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){StepHooks.resumeLocation();render(PRIVACY);}});ripple(x);return x;}
-    private View chargeMode(){LinearLayout r=row();r.setOrientation(LinearLayout.VERTICAL);r.setGravity(Gravity.START);TextView label=text("показывать заряд",16,PRIMARY);label.setTypeface(Typeface.DEFAULT,Typeface.BOLD);r.addView(label,new LinearLayout.LayoutParams(-1,dp(34)));LinearLayout choices=new LinearLayout(this);choices.setGravity(Gravity.CENTER_VERTICAL);final int[] values={-1,100,50,1};String[] names={"реальный","100","50","1"};for(int i=0;i<values.length;i++){final int value=values[i];TextView x=text(names[i],14,PRIMARY);x.setGravity(Gravity.CENTER);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setBackground(round(StepHooks.forcedCharge==value&&!StepHooks.hideCharge?PURPLE:Color.rgb(47,47,51),13));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(0,dp(42),1);if(i>0)xp.leftMargin=dp(7);choices.addView(x,xp);x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){StepHooks.setForcedCharge(value);render(PRIVACY);}});}r.addView(choices,new LinearLayout.LayoutParams(-1,dp(42)));r.setPadding(dp(16),dp(12),dp(16),dp(14));return r;}
-    private View geoFrequency(){LinearLayout r=row();r.setOrientation(LinearLayout.VERTICAL);r.setGravity(Gravity.START);TextView label=text("отправлять позицию",16,PRIMARY);label.setTypeface(Typeface.DEFAULT,Typeface.BOLD);r.addView(label,new LinearLayout.LayoutParams(-1,dp(34)));LinearLayout choices=new LinearLayout(this);choices.setGravity(Gravity.CENTER_VERTICAL);final int[] values={0,5,15,30};String[] names={"всегда","5 мин","15 мин","30 мин"};int selected=getSharedPreferences(PREFS,0).getInt("geo_interval_minutes",0);for(int i=0;i<values.length;i++){final int value=values[i];TextView x=text(names[i],14,PRIMARY);x.setGravity(Gravity.CENTER);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setBackground(round(selected==value?PURPLE:Color.rgb(47,47,51),13));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(0,dp(42),1);if(i>0)xp.leftMargin=dp(7);choices.addView(x,xp);x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){StepHooks.setGeoIntervalMinutes(value);render(PRIVACY);}});}r.addView(choices,new LinearLayout.LayoutParams(-1,dp(42)));r.setPadding(dp(16),dp(12),dp(16),dp(14));return r;}
-    private View locationPrecision(){LinearLayout r=row();r.setOrientation(LinearLayout.VERTICAL);r.setGravity(Gravity.START);TextView label=text("передавать позицию",16,PRIMARY);label.setTypeface(Typeface.DEFAULT,Typeface.BOLD);r.addView(label,new LinearLayout.LayoutParams(-1,dp(34)));LinearLayout choices=new LinearLayout(this);choices.setGravity(Gravity.CENTER_VERTICAL);final int[] values={0,3,2};String[] names={"точно","~100 м","~1 км"};int selected=getSharedPreferences(PREFS,0).getInt("location_precision",0);for(int i=0;i<values.length;i++){final int value=values[i];TextView x=text(names[i],14,PRIMARY);x.setGravity(Gravity.CENTER);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setBackground(round(selected==value?PURPLE:Color.rgb(47,47,51),13));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(0,dp(42),1);if(i>0)xp.leftMargin=dp(7);choices.addView(x,xp);x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){StepHooks.setLocationPrecision(value);render(PRIVACY);}});}r.addView(choices,new LinearLayout.LayoutParams(-1,dp(42)));r.setPadding(dp(16),dp(12),dp(16),dp(14));return r;}
-    private View worldTourControls(){
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(14),dp(12),dp(14),dp(14));
-        LinearLayout speedRow=new LinearLayout(this);speedRow.setGravity(Gravity.CENTER_VERTICAL);
-        TextView speedLabel=text("Интервал",15,PRIMARY);speedLabel.setTypeface(Typeface.DEFAULT,Typeface.BOLD);speedRow.addView(speedLabel,new LinearLayout.LayoutParams(0,dp(38),1));
-        final int[] delays={250,1000,3000};String[] delayNames={"250 мс","1 с","3 с"};int selected=getSharedPreferences(PREFS,0).getInt("world_tour_delay",250);
-        for(int i=0;i<delays.length;i++){final int d=delays[i];TextView btn=text(delayNames[i],13,PRIMARY);btn.setGravity(Gravity.CENTER);btn.setTypeface(Typeface.DEFAULT,Typeface.BOLD);btn.setBackground(round(selected==d?PURPLE:Color.rgb(47,47,51),11));LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(dp(62),dp(34));if(i>0)bp.leftMargin=dp(6);speedRow.addView(btn,bp);btn.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){getSharedPreferences(PREFS,0).edit().putInt("world_tour_delay",d).apply();render(PRIVACY);}});}
-        box.addView(speedRow,new LinearLayout.LayoutParams(-1,-2));
-        if(WorldTour.isRunning()){
-            TextView stopBtn=text("Остановить турне",16,Color.rgb(255,90,90));stopBtn.setTypeface(Typeface.DEFAULT,Typeface.BOLD);stopBtn.setGravity(Gravity.CENTER);stopBtn.setBackground(round(Color.rgb(45,25,25),15));LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,dp(50));sp.topMargin=dp(10);stopBtn.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){WorldTour.stop();render(PRIVACY);}});ripple(stopBtn);box.addView(stopBtn,sp);
-        }else{
-            LinearLayout buttons=new LinearLayout(this);buttons.setOrientation(LinearLayout.VERTICAL);
-            TextView citiesBtn=text("Облететь страны мира (301)",15,PRIMARY);citiesBtn.setTypeface(Typeface.DEFAULT,Typeface.BOLD);citiesBtn.setGravity(Gravity.CENTER);citiesBtn.setBackground(round(PURPLE,15));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(50));cp.topMargin=dp(10);citiesBtn.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){int delay=getSharedPreferences(PREFS,0).getInt("world_tour_delay",250);WorldTour.start(getApplicationContext(),WorldTour.MODE_COUNTRIES_ONLY,delay,new Runnable(){@Override public void run(){runOnUiThread(new Runnable(){@Override public void run(){if(PRIVACY.equals(page))render(PRIVACY);}});}});render(PRIVACY);}});ripple(citiesBtn);buttons.addView(citiesBtn,cp);
-            TextView globeBtn=text("Облететь всю планету (сетка + океаны)",14,SECONDARY);globeBtn.setTypeface(Typeface.DEFAULT,Typeface.BOLD);globeBtn.setGravity(Gravity.CENTER);globeBtn.setBackground(round(Color.rgb(35,35,39),15));LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,dp(46));gp.topMargin=dp(8);globeBtn.setOnClickListener(new View.OnClickListener(){@Override public void onClick(final View v){int delay=getSharedPreferences(PREFS,0).getInt("world_tour_delay",250);WorldTour.start(getApplicationContext(),WorldTour.MODE_GLOBE_GRID,delay,new Runnable(){@Override public void run(){runOnUiThread(new Runnable(){@Override public void run(){if(PRIVACY.equals(page))render(PRIVACY);}});}});render(PRIVACY);}});ripple(globeBtn);buttons.addView(globeBtn,gp);
-            box.addView(buttons,new LinearLayout.LayoutParams(-1,-2));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+            getWindow().setNavigationBarColor(COLOR_SURFACE_CONTAINER_LOW);
         }
+
+        activeTab = getSharedPreferences(PREFS, 0).getInt("last_active_tab", TAB_BOOST);
+        buildBottomSheetView();
+        renderTab(activeTab, false);
+        animateEnter();
+    }
+
+    @Override
+    public void onBackPressed() {
+        closeAnimated();
+    }
+
+    private static final PathInterpolator INTERPOLATOR_EMPHASIZED = new PathInterpolator(0.05f, 0.7f, 0.1f, 1.0f);
+    private static final PathInterpolator INTERPOLATOR_ACCELERATE = new PathInterpolator(0.3f, 0.0f, 0.8f, 0.15f);
+    private static final OvershootInterpolator INTERPOLATOR_SPRING = new OvershootInterpolator(1.3f);
+    private static final OvershootInterpolator INTERPOLATOR_SHEET_SPRING = new OvershootInterpolator(0.6f);
+
+    private static void addTouchSpring(final View view) {
+        if (view == null) return;
+        view.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.animate()
+                                .scaleX(0.95f)
+                                .scaleY(0.95f)
+                                .setDuration(100)
+                                .setInterpolator(INTERPOLATOR_ACCELERATE)
+                                .start();
+                        break;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.animate()
+                                .scaleX(1.0f)
+                                .scaleY(1.0f)
+                                .setDuration(260)
+                                .setInterpolator(INTERPOLATOR_SPRING)
+                                .start();
+                        break;
+                }
+                return false;
+            }
+        });
+    }
+
+    public void closeAnimated() {
+        if (isClosing) return;
+        isClosing = true;
+
+        scrimView.animate()
+                .alpha(0f)
+                .setDuration(220)
+                .setInterpolator(INTERPOLATOR_ACCELERATE)
+                .start();
+
+        float targetY = sheetContainer.getHeight() > 0 ? sheetContainer.getHeight() : dp(650);
+        sheetContainer.animate()
+                .translationY(targetY)
+                .scaleX(0.96f)
+                .scaleY(0.96f)
+                .alpha(0.0f)
+                .setInterpolator(INTERPOLATOR_ACCELERATE)
+                .setDuration(220)
+                .withEndAction(new Runnable() {
+                    @Override
+                    public void run() {
+                        finish();
+                        overridePendingTransition(0, 0);
+                    }
+                })
+                .start();
+    }
+
+    private void animateEnter() {
+        scrimView.setAlpha(0f);
+        scrimView.animate()
+                .alpha(1f)
+                .setDuration(280)
+                .setInterpolator(INTERPOLATOR_EMPHASIZED)
+                .start();
+
+        final DisplayMetrics dm = getResources().getDisplayMetrics();
+        sheetContainer.setTranslationY(dm.heightPixels * 0.80f);
+        sheetContainer.setScaleX(0.94f);
+        sheetContainer.setScaleY(0.94f);
+        sheetContainer.setAlpha(0.2f);
+
+        sheetContainer.animate()
+                .translationY(0f)
+                .scaleX(1.0f)
+                .scaleY(1.0f)
+                .alpha(1.0f)
+                .setInterpolator(INTERPOLATOR_SHEET_SPRING)
+                .setDuration(400)
+                .withEndAction(new Runnable() {
+                    @Override
+                    public void run() {
+                        animateCardsCascade();
+                    }
+                })
+                .start();
+    }
+
+    private void buildBottomSheetView() {
+        rootLayout = new FrameLayout(this);
+        rootLayout.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
+
+        // 1. Scrim
+        scrimView = new View(this);
+        scrimView.setBackgroundColor(COLOR_SCRIM);
+        scrimView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                closeAnimated();
+            }
+        });
+        rootLayout.addView(scrimView, new FrameLayout.LayoutParams(-1, -1));
+
+        // 2. Bottom Sheet Container (M3 Extra Large shape: 28dp top corners)
+        sheetContainer = new LinearLayout(this);
+        sheetContainer.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(COLOR_SURFACE_CONTAINER_LOW);
+        sheetBg.setCornerRadii(new float[]{dp(28), dp(28), dp(28), dp(28), 0, 0, 0, 0});
+        sheetBg.setStroke(dp(1), COLOR_OUTLINE);
+        sheetContainer.setBackground(sheetBg);
+        sheetContainer.setClickable(true);
+
+        final DisplayMetrics dm = getResources().getDisplayMetrics();
+        final int maxHeight = (int) (dm.heightPixels * 0.88f);
+        FrameLayout.LayoutParams sheetLp = new FrameLayout.LayoutParams(-1, maxHeight);
+        sheetLp.gravity = Gravity.BOTTOM;
+        rootLayout.addView(sheetContainer, sheetLp);
+
+        // 3. Top Drag Handle (M3 standard: 32x4dp, corner 2dp, #79747E)
+        FrameLayout handleArea = new FrameLayout(this);
+        handleArea.setPadding(0, dp(12), 0, dp(6));
+
+        View handle = new View(this);
+        GradientDrawable handleBg = new GradientDrawable();
+        handleBg.setColor(COLOR_DRAG_HANDLE);
+        handleBg.setCornerRadius(dp(2));
+        handle.setBackground(handleBg);
+        FrameLayout.LayoutParams handleLp = new FrameLayout.LayoutParams(dp(32), dp(4));
+        handleLp.gravity = Gravity.CENTER;
+        handleArea.addView(handle, handleLp);
+
+        sheetContainer.addView(handleArea, new LinearLayout.LayoutParams(-1, -2));
+        setupDragToClose(sheetContainer, handleArea);
+
+        // 4. Header Bar
+        sheetContainer.addView(buildHeaderBar(), new LinearLayout.LayoutParams(-1, -2));
+
+        // 5. Tabs
+        View tabs = buildTabsBar();
+        sheetContainer.addView(tabs, tabs.getLayoutParams());
+
+        // 6. Scrollable Content Area
+        scrollView = new ScrollView(this);
+        scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        scrollView.setClipToPadding(false);
+
+        contentContainer = new LinearLayout(this);
+        contentContainer.setOrientation(LinearLayout.VERTICAL);
+        contentContainer.setPadding(dp(16), dp(4), dp(16), dp(36));
+
+        scrollView.addView(contentContainer, new ScrollView.LayoutParams(-1, -2));
+        sheetContainer.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1f));
+
+        // Window insets
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            rootLayout.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+                @Override
+                public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+                    int bottom = 0;
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        bottom = insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
+                    } else {
+                        bottom = insets.getSystemWindowInsetBottom();
+                    }
+                    contentContainer.setPadding(dp(16), dp(4), dp(16), bottom + dp(24));
+                    return insets;
+                }
+            });
+        }
+
+        setContentView(rootLayout);
+    }
+
+    private void setupDragToClose(final View sheet, View touchArea) {
+        touchArea.setOnTouchListener(new View.OnTouchListener() {
+            float startY;
+            float initialTransY;
+            boolean isDragging;
+            VelocityTracker velocityTracker;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (velocityTracker == null) {
+                    velocityTracker = VelocityTracker.obtain();
+                }
+                velocityTracker.addMovement(event);
+
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startY = event.getRawY();
+                        initialTransY = sheet.getTranslationY();
+                        isDragging = true;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        if (!isDragging) return false;
+                        float dy = event.getRawY() - startY;
+                        if (dy < 0) {
+                            sheet.setTranslationY(initialTransY + dy * 0.2f);
+                        } else {
+                            sheet.setTranslationY(initialTransY + dy);
+                            float progress = Math.min(1f, dy / (float) Math.max(1, sheet.getHeight()));
+                            scrimView.setAlpha(Math.max(0.15f, 1f - progress * 0.85f));
+                            float scale = 1.0f - progress * 0.04f;
+                            sheet.setScaleX(scale);
+                            sheet.setScaleY(scale);
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (!isDragging) return false;
+                        isDragging = false;
+                        velocityTracker.computeCurrentVelocity(1000);
+                        float vy = velocityTracker.getYVelocity();
+                        velocityTracker.recycle();
+                        velocityTracker = null;
+
+                        float totalDy = event.getRawY() - startY;
+                        if (totalDy > dp(90) || vy > 1200) {
+                            closeAnimated();
+                        } else {
+                            sheet.animate()
+                                    .translationY(0f)
+                                    .scaleX(1.0f)
+                                    .scaleY(1.0f)
+                                    .setInterpolator(INTERPOLATOR_EMPHASIZED)
+                                    .setDuration(260)
+                                    .start();
+                            scrimView.animate()
+                                    .alpha(1.0f)
+                                    .setInterpolator(INTERPOLATOR_EMPHASIZED)
+                                    .setDuration(260)
+                                    .start();
+                        }
+                        return true;
+                }
+                return false;
+            }
+        });
+    }
+
+    private View buildHeaderBar() {
+        FrameLayout header = new FrameLayout(this);
+        header.setPadding(dp(16), dp(2), dp(16), dp(8));
+
+        LinearLayout brand = new LinearLayout(this);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+
+        ImageView icon = new ImageView(this);
+        try {
+            icon.setImageDrawable(getPackageManager().getApplicationIcon(getPackageName()));
+        } catch (Exception ignored) {}
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        brand.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
+
+        LinearLayout titleBox = new LinearLayout(this);
+        titleBox.setOrientation(LinearLayout.VERTICAL);
+        titleBox.setPadding(dp(12), 0, 0, 0);
+
+        TextView title = new TextView(this);
+        title.setText("BlinkMod 2.0");
+        title.setTextSize(18);
+        title.setTextColor(COLOR_ON_SURFACE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        titleBox.addView(title);
+
+        TextView version = new TextView(this);
+        version.setText(ModConfig.getVersionDisplay(this));
+        version.setTextSize(11);
+        version.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        titleBox.addView(version);
+
+        brand.addView(titleBox);
+
+        brand.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                long now = System.currentTimeMillis();
+                if (now - lastTapTime > 2000) devTaps = 0;
+                lastTapTime = now;
+                devTaps++;
+                if (devTaps >= 5) {
+                    devTaps = 0;
+                    boolean enabled = ModConfig.toggleDevMode(ModSettingsActivity.this);
+                    Toast.makeText(ModSettingsActivity.this,
+                            enabled ? "Режим разработчика активирован" : "Режим разработчика выключен",
+                            Toast.LENGTH_SHORT).show();
+                    rebuildTabs();
+                    renderTab(enabled ? TAB_LAB : TAB_BOOST, true);
+                }
+            }
+        });
+
+        addTouchSpring(brand);
+        FrameLayout.LayoutParams brandLp = new FrameLayout.LayoutParams(-2, -2);
+        brandLp.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
+        header.addView(brand, brandLp);
+
+        TextView closeBtn = new TextView(this);
+        closeBtn.setText("×");
+        closeBtn.setTextSize(20);
+        closeBtn.setTextColor(COLOR_ON_SURFACE);
+        closeBtn.setGravity(Gravity.CENTER);
+        closeBtn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        GradientDrawable closeBg = new GradientDrawable();
+        closeBg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        closeBg.setShape(GradientDrawable.OVAL);
+        closeBtn.setBackground(closeBg);
+        addTouchSpring(closeBtn);
+        closeBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                closeAnimated();
+            }
+        });
+
+        FrameLayout.LayoutParams closeLp = new FrameLayout.LayoutParams(dp(32), dp(32));
+        closeLp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        header.addView(closeBtn, closeLp);
+
+        return header;
+    }
+
+    private View buildTabsBar() {
+        tabsRow = new LinearLayout(this);
+        tabsRow.setOrientation(LinearLayout.HORIZONTAL);
+        tabsRow.setPadding(dp(4), dp(4), dp(4), dp(4));
+        GradientDrawable barBg = new GradientDrawable();
+        barBg.setColor(COLOR_SURFACE_CONTAINER);
+        barBg.setCornerRadius(dp(22));
+        barBg.setStroke(dp(1), COLOR_OUTLINE);
+        tabsRow.setBackground(barBg);
+
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(-1, -2);
+        rowLp.leftMargin = dp(16);
+        rowLp.rightMargin = dp(16);
+        rowLp.topMargin = dp(2);
+        rowLp.bottomMargin = dp(10);
+        tabsRow.setLayoutParams(rowLp);
+
+        rebuildTabs();
+        return tabsRow;
+    }
+
+    private void rebuildTabs() {
+        tabsRow.removeAllViews();
+        boolean hasDev = ModConfig.isDevMode(this);
+        int count = hasDev ? 4 : 3;
+
+        String[] tabNames = hasDev ?
+                new String[]{"Буст", "Фантом", "Профиль", "Lab"} :
+                new String[]{"Буст", "Фантом", "Профиль"};
+        int[] tabIds = hasDev ?
+                new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE, TAB_LAB} :
+                new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE};
+
+        tabButtons = new TextView[count];
+
+        for (int i = 0; i < count; i++) {
+            final int id = tabIds[i];
+            TextView tab = new TextView(this);
+            tab.setText(tabNames[i]);
+            tab.setTextSize(13);
+            tab.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            tab.setGravity(Gravity.CENTER);
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(36), 1f);
+            if (i > 0) lp.leftMargin = dp(4);
+            tabsRow.addView(tab, lp);
+            tabButtons[i] = tab;
+            addTouchSpring(tab);
+
+            tab.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    renderTab(id, true);
+                }
+            });
+        }
+        updateTabStyles();
+    }
+
+    private void updateTabStyles() {
+        if (tabButtons == null) return;
+        boolean hasDev = ModConfig.isDevMode(this);
+        int[] tabIds = hasDev ?
+                new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE, TAB_LAB} :
+                new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE};
+
+        for (int i = 0; i < tabButtons.length; i++) {
+            TextView tab = tabButtons[i];
+            boolean selected = (tabIds[i] == activeTab);
+            tab.setTextColor(selected ? COLOR_ON_PRIMARY_CONTAINER : COLOR_ON_SURFACE_VARIANT);
+
+            GradientDrawable tabBg = new GradientDrawable();
+            if (selected) {
+                tabBg.setColor(COLOR_PRIMARY_CONTAINER);
+                tabBg.setCornerRadius(dp(18));
+            } else {
+                tabBg.setColor(Color.TRANSPARENT);
+            }
+            tab.setBackground(tabBg);
+        }
+    }
+
+    private void renderTab(final int tab, boolean animate) {
+        final int prevTab = activeTab;
+        activeTab = tab;
+        getSharedPreferences(PREFS, 0).edit().putInt("last_active_tab", tab).apply();
+        updateTabStyles();
+
+        if (animate && prevTab != tab) {
+            final int direction = (tab > prevTab) ? 1 : -1;
+            contentContainer.animate()
+                    .alpha(0.0f)
+                    .translationX(-direction * dp(24))
+                    .setDuration(110)
+                    .setInterpolator(INTERPOLATOR_ACCELERATE)
+                    .withEndAction(new Runnable() {
+                        @Override
+                        public void run() {
+                            populateTabContent(tab);
+                            scrollView.scrollTo(0, 0);
+                            contentContainer.setTranslationX(direction * dp(28));
+                            contentContainer.setAlpha(0f);
+                            contentContainer.animate()
+                                    .alpha(1f)
+                                    .translationX(0f)
+                                    .setDuration(220)
+                                    .setInterpolator(INTERPOLATOR_EMPHASIZED)
+                                    .start();
+                            animateCardsCascade();
+                        }
+                    })
+                    .start();
+        } else {
+            populateTabContent(tab);
+            scrollView.scrollTo(0, 0);
+            contentContainer.setTranslationX(0f);
+            contentContainer.setAlpha(1f);
+            if (animate) animateCardsCascade();
+        }
+    }
+
+    private void animateCardsCascade() {
+        int count = contentContainer.getChildCount();
+        for (int i = 0; i < count; i++) {
+            View child = contentContainer.getChildAt(i);
+            child.setAlpha(0f);
+            child.setTranslationY(dp(16));
+            child.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(280)
+                    .setStartDelay(i * 35)
+                    .setInterpolator(INTERPOLATOR_EMPHASIZED)
+                    .start();
+        }
+    }
+
+    private void populateTabContent(int tab) {
+        contentContainer.removeAllViews();
+        switch (tab) {
+            case TAB_BOOST:
+                renderBoostTab(contentContainer);
+                break;
+            case TAB_GHOST:
+                renderGhostTab(contentContainer);
+                break;
+            case TAB_PROFILE:
+                renderProfileTab(contentContainer);
+                break;
+            case TAB_LAB:
+                renderLabTab(contentContainer);
+                break;
+        }
+    }
+
+    // =========================================================================
+    // 1. БУСТ (BOOST TAB)
+    // =========================================================================
+    private void renderBoostTab(LinearLayout container) {
+        // --- Flexible Steps Card ---
+        LinearLayout stepsCard = card();
+        sectionTitle(stepsCard, "ШАГИ");
+
+        final SharedPreferences sp = getSharedPreferences(PREFS, 0);
+        final int targetSteps = sp.getInt("target_steps_count", 100000);
+        String formattedSteps = String.format(Locale.US, "%,d", targetSteps).replace(',', ' ');
+
+        TextView postStepsBtn = buttonPrimary("Отправить " + formattedSteps + " шагов");
+        postStepsBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                haptic(v);
+                try {
+                    int stepsToSend = sp.getInt("target_steps_count", 100000);
+                    long now = System.currentTimeMillis();
+                    String iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(new Date(now));
+                    StepHooks.onApiStarted();
+                    Class<?> c = Class.forName("com.blinkmap.mod.WorkBridge");
+                    try {
+                        c.getMethod("postSteps", Context.class, Integer.TYPE, Long.TYPE, String.class)
+                                .invoke(null, getApplicationContext(), stepsToSend, now, iso);
+                    } catch (NoSuchMethodException nsme) {
+                        c.getMethod("post100k", Context.class, Long.TYPE, String.class)
+                                .invoke(null, getApplicationContext(), now, iso);
+                    }
+
+                    Toast.makeText(ModSettingsActivity.this, "Запрос отправлен", Toast.LENGTH_SHORT).show();
+                    v.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (activeTab == TAB_BOOST) renderTab(TAB_BOOST, false);
+                        }
+                    }, 1800);
+                } catch (Throwable e) {
+                    StepHooks.onApiError(e);
+                    Toast.makeText(ModSettingsActivity.this, "Ошибка: " + e.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+        stepsCard.addView(postStepsBtn);
+
+        // Presets: 10k, 25k, 50k, 100k, Своё
+        LinearLayout stepsPills = new LinearLayout(this);
+        stepsPills.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams spLp = new LinearLayout.LayoutParams(-1, -2);
+        spLp.topMargin = dp(8);
+        stepsPills.setLayoutParams(spLp);
+
+        final int[] presetSteps = {10000, 25000, 50000, 100000};
+        final String[] presetLabels = {"10k", "25k", "50k", "100k"};
+
+        boolean isCustom = true;
+        for (int pVal : presetSteps) {
+            if (targetSteps == pVal) {
+                isCustom = false;
+                break;
+            }
+        }
+
+        final TextView[] presetPillsList = new TextView[presetSteps.length];
+        final TextView[] customPillRef = new TextView[1];
+
+        for (int i = 0; i < presetSteps.length; i++) {
+            final int index = i;
+            final int sVal = presetSteps[i];
+            boolean selected = (targetSteps == sVal);
+            TextView pill = createPill(presetLabels[i], selected);
+            presetPillsList[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            stepsPills.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    sp.edit().putInt("target_steps_count", sVal).apply();
+                    postStepsBtn.setText("Отправить " + String.format(Locale.US, "%,d", sVal).replace(',', ' ') + " шагов");
+                    for (int j = 0; j < presetPillsList.length; j++) {
+                        updatePillStyle(presetPillsList[j], j == index);
+                    }
+                    if (customPillRef[0] != null) {
+                        customPillRef[0].setText("Своё");
+                        updatePillStyle(customPillRef[0], false);
+                    }
+                }
+            });
+        }
+
+        String customLabel = isCustom ? (targetSteps >= 1000 ? (targetSteps / 1000 + "k") : String.valueOf(targetSteps)) : "Своё";
+        final TextView customPill = createPill(customLabel, isCustom);
+        customPillRef[0] = customPill;
+        ((LinearLayout.LayoutParams) customPill.getLayoutParams()).leftMargin = dp(6);
+        customPill.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                showCustomStepsDialog(postStepsBtn, presetPillsList, customPill);
+            }
+        });
+        stepsPills.addView(customPill);
+        stepsCard.addView(stepsPills);
+
+        String lastStepState = getSharedPreferences(PREFS, 0).getString("api_steps_state", "Запросов пока не было");
+        int verifiedSteps = getSharedPreferences(PREFS, 0).getInt("api_steps_verified", 0);
+
+        Md3ProgressBar stepsProgress = new Md3ProgressBar(this);
+        stepsProgress.setColors(COLOR_SURFACE_CONTAINER_HIGHEST, COLOR_PRIMARY, COLOR_DRAG_HANDLE);
+        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(8));
+        pbLp.topMargin = dp(14);
+        pbLp.bottomMargin = dp(6);
+        stepsProgress.setLayoutParams(pbLp);
+
+        if (lastStepState.contains("Отправляется") || lastStepState.contains("Проверяем")) {
+            stepsProgress.setIndeterminate(true);
+        } else {
+            float p = Math.min(1.0f, (float) verifiedSteps / (float) Math.max(1, targetSteps));
+            stepsProgress.setProgress(p, false);
+        }
+        stepsCard.addView(stepsProgress);
+
+        stepsCard.addView(statusInfoRow("Статус шагов", lastStepState));
+        stepsCard.addView(line());
+
+        // Multiplier switch & selector
+        stepsCard.addView(toggleRow("Умножать шаги при синхронизации",
+                "Автоматически масштабирует входящие шаги",
+                "network_steps_enabled", false, null));
+        stepsCard.addView(line());
+
+        stepsCard.addView(multiplierSelector("Множитель отправки", "network_steps_multiplier", new int[]{1, 2, 5, 10}));
+        container.addView(stepsCard, bottomMargin(14));
+
+        // NOTE: World Tour is STRICTLY GATED ONLY FOR DEV BUILDS (NEVER IN PUBLIC)
+        if (ModConfig.IS_DEV_BUILD) {
+            WorldTourUi.attach(container, this);
+        }
+    }
+
+    // =========================================================================
+    // 2. ФАНТОМ (GHOST / PRIVACY TAB)
+    // =========================================================================
+    private void renderGhostTab(LinearLayout container) {
+        // --- Location Spoofing Card ---
+        LinearLayout geoCard = card();
+        sectionTitle(geoCard, "ПОДМЕНА ГЕОЛОКАЦИИ");
+
+        boolean isSpoofing = StepHooks.isSpoofingActive();
+        View badgeRow = badgeStatusRow("Режим координат",
+                isSpoofing ? "Фейк активен" : "Реальный GPS",
+                isSpoofing ? COLOR_SUCCESS : COLOR_ON_SURFACE_VARIANT);
+        final TextView badgeModeText = (TextView) ((LinearLayout) badgeRow).getChildAt(1);
+        geoCard.addView(badgeRow);
+
+        View coordsRow = statusInfoRow("Координаты", StepHooks.customCoordsText());
+        final TextView coordsValText = (TextView) ((LinearLayout) coordsRow).getChildAt(1);
+        geoCard.addView(coordsRow);
+        geoCard.addView(line());
+
+        final Runnable updateGeoHeader = new Runnable() {
+            @Override
+            public void run() {
+                boolean active = StepHooks.isSpoofingActive();
+                badgeModeText.setText(active ? "Фейк активен" : "Реальный GPS");
+                updateBadgeStyle(badgeModeText, active ? COLOR_SUCCESS : COLOR_ON_SURFACE_VARIANT);
+                coordsValText.setText(StepHooks.customCoordsText());
+            }
+        };
+
+        // Big Map Picker Button
+        TextView mapPickerBtn = buttonPrimary("Выбрать точку на карте");
+        mapPickerBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                final Activity target = MapPicker.getTopActivity();
+                closeAnimated();
+                v.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        MapPicker.showPicker(target);
+                    }
+                }, 180);
+            }
+        });
+        geoCard.addView(mapPickerBtn);
+
+        // Sub-actions row: Paste, Pin current, Reset (M3 Outlined buttons)
+        LinearLayout quickBtns = new LinearLayout(this);
+        quickBtns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(-1, -2);
+        qp.topMargin = dp(8);
+        quickBtns.setLayoutParams(qp);
+
+        TextView btnPaste = buttonOutlined("Из буфера");
+        btnPaste.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                if (StepHooks.setCustomLocationFromClipboard(ModSettingsActivity.this)) {
+                    Toast.makeText(ModSettingsActivity.this, "Координаты применены", Toast.LENGTH_SHORT).show();
+                    updateGeoHeader.run();
+                } else {
+                    Toast.makeText(ModSettingsActivity.this, "В буфере нет координат", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        TextView btnPin = buttonOutlined("Зафиксировать");
+        btnPin.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                StepHooks.setCustomLocationFromCurrent(ModSettingsActivity.this);
+                Toast.makeText(ModSettingsActivity.this, "Позиция зафиксирована", Toast.LENGTH_SHORT).show();
+                updateGeoHeader.run();
+            }
+        });
+
+        TextView btnReset = buttonOutlined("Сброс GPS");
+        btnReset.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                StepHooks.resetCustomLocation(ModSettingsActivity.this);
+                Toast.makeText(ModSettingsActivity.this, "Возврат к реальному GPS", Toast.LENGTH_SHORT).show();
+                updateGeoHeader.run();
+            }
+        });
+
+        quickBtns.addView(btnPaste, new LinearLayout.LayoutParams(0, dp(40), 1f));
+        quickBtns.addView(btnPin, createMarginedParams(dp(6)));
+        quickBtns.addView(btnReset, createMarginedParams(dp(6)));
+        geoCard.addView(quickBtns);
+
+        container.addView(geoCard, bottomMargin(14));
+
+        renderFollowerCard(container, updateGeoHeader);
+
+        // --- Smart Drift Card ---
+        LinearLayout driftCard = card();
+        sectionTitle(driftCard, "УМНЫЙ ДРЕЙФ");
+        TextView driftDesc = textSmall("Имитирует живую ходьбу с шагами и курсом, исключая подозрения в статичной позиции.");
+        driftCard.addView(driftDesc);
+
+        LinearLayout driftPills = new LinearLayout(this);
+        driftPills.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams dpLp = new LinearLayout.LayoutParams(-1, -2);
+        dpLp.topMargin = dp(8);
+        driftPills.setLayoutParams(dpLp);
+
+        int currentDrift = StepHooks.driftMode;
+        final int[] driftValues = {0, 1, 2, 3, 4};
+        final String[] driftLabels = {"Выкл", "±10м", "Ходьба", "Бег", "Авто"};
+        final TextView[] driftPillsList = new TextView[driftValues.length];
+
+        for (int i = 0; i < driftValues.length; i++) {
+            final int index = i;
+            final int mode = driftValues[i];
+            TextView pill = createPill(driftLabels[i], currentDrift == mode);
+            driftPillsList[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            driftPills.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    StepHooks.setDriftMode(mode);
+                    for (int j = 0; j < driftPillsList.length; j++) {
+                        updatePillStyle(driftPillsList[j], j == index);
+                    }
+                    updateGeoHeader.run();
+                }
+            });
+        }
+        driftCard.addView(driftPills);
+        container.addView(driftCard, bottomMargin(14));
+
+        // --- Freeze / Pause Card ---
+        LinearLayout pauseCard = card();
+        sectionTitle(pauseCard, "ЗАМОРОЗКА ГЕОЛОКАЦИИ");
+        View pauseStatusRow = statusInfoRow("Состояние", StepHooks.pauseStatus());
+        final TextView pauseStatusVal = (TextView) ((LinearLayout) pauseStatusRow).getChildAt(1);
+        pauseCard.addView(pauseStatusRow);
+        pauseCard.addView(line());
+
+        LinearLayout pausePills = new LinearLayout(this);
+        pausePills.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams ppLp = new LinearLayout.LayoutParams(-1, -2);
+        ppLp.topMargin = dp(8);
+        pausePills.setLayoutParams(ppLp);
+
+        final long[] pauseTimes = {15 * 60 * 1000L, 60 * 60 * 1000L};
+        final String[] pauseLabels = {"15 мин", "1 час"};
+
+        for (int i = 0; i < pauseTimes.length; i++) {
+            final long dur = pauseTimes[i];
+            TextView pill = buttonOutlined(pauseLabels[i]);
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            pausePills.addView(pill);
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    StepHooks.pauseFor(dur);
+                    pauseStatusVal.setText(StepHooks.pauseStatus());
+                    updateGeoHeader.run();
+                }
+            });
+        }
+
+        TextView pillForever = buttonOutlined("Навсегда");
+        ((LinearLayout.LayoutParams) pillForever.getLayoutParams()).leftMargin = dp(6);
+        pillForever.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                StepHooks.setPauseLocation(true);
+                pauseStatusVal.setText(StepHooks.pauseStatus());
+                updateGeoHeader.run();
+            }
+        });
+        pausePills.addView(pillForever);
+
+        TextView pillResume = buttonTonal("Снять");
+        ((LinearLayout.LayoutParams) pillResume.getLayoutParams()).leftMargin = dp(6);
+        pillResume.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                StepHooks.resumeLocation();
+                pauseStatusVal.setText(StepHooks.pauseStatus());
+                updateGeoHeader.run();
+            }
+        });
+        pausePills.addView(pillResume);
+
+        pauseCard.addView(pausePills);
+        container.addView(pauseCard, bottomMargin(14));
+
+        // --- Battery Spoofing Card ---
+        LinearLayout batteryCard = card();
+        sectionTitle(batteryCard, "ЗАРЯД БАТАРЕИ");
+
+        final LinearLayout batPills = new LinearLayout(this);
+        batPills.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams bpLp = new LinearLayout.LayoutParams(-1, -2);
+        bpLp.topMargin = dp(6);
+        batPills.setLayoutParams(bpLp);
+
+        final int[] batVals = {-1, 100, 50, 1};
+        final String[] batNames = {"Реальный", "100%", "50%", "1%"};
+        int curCharge = StepHooks.forcedCharge;
+        boolean hideCharge = StepHooks.hideCharge;
+
+        final TextView[] batPillsList = new TextView[batVals.length];
+        for (int i = 0; i < batVals.length; i++) {
+            final int index = i;
+            final int val = batVals[i];
+            boolean selected = !hideCharge && (curCharge == val);
+            TextView pill = createPill(batNames[i], selected);
+            batPillsList[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            batPills.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    StepHooks.setForcedCharge(val);
+                    for (int j = 0; j < batPillsList.length; j++) {
+                        updatePillStyle(batPillsList[j], j == index);
+                    }
+                }
+            });
+        }
+
+        batteryCard.addView(toggleRow("Скрыть заряд батареи",
+                "Передаёт значение заряда как null",
+                "hide_charge", false, new ToggleSwitchView.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                        StepHooks.setHideCharge(isChecked);
+                        if (isChecked) {
+                            for (TextView p : batPillsList) {
+                                updatePillStyle(p, false);
+                            }
+                        } else {
+                            int charge = StepHooks.forcedCharge;
+                            for (int j = 0; j < batVals.length; j++) {
+                                updatePillStyle(batPillsList[j], batVals[j] == charge);
+                            }
+                        }
+                    }
+                }));
+        batteryCard.addView(line());
+
+        TextView batLabel = textSmall("Фиксированный уровень:");
+        batteryCard.addView(batLabel);
+        batteryCard.addView(batPills);
+        container.addView(batteryCard, bottomMargin(14));
+    }
+
+    // =========================================================================
+    // 3. ПРОФИЛЬ (PROFILE TAB)
+    // =========================================================================
+    private void renderProfileTab(LinearLayout container) {
+        SharedPreferences p = getSharedPreferences(PREFS, 0);
+
+        // --- Profile Card ---
+        LinearLayout profCard = card();
+        sectionTitle(profCard, "АККАУНТ");
+
+        String name = p.getString("profile_name", "—");
+        String username = p.getString("profile_username", "");
+        String accountId = p.getString("profile_account_id", "—");
+        String badge = BadgeManager.getBadge(username, accountId);
+
+        profCard.addView(copyRow("Имя", name, "Имя скопировано"));
+        profCard.addView(line());
+        profCard.addView(copyRow("Username", username.isEmpty() ? "—" : "@" + username, "Username скопирован"));
+        profCard.addView(line());
+        profCard.addView(copyRow("Account ID", accountId, "ID скопирован"));
+        profCard.addView(line());
+        profCard.addView(copyRow("Бейдж", badge == null ? "Обычный" : badge, "Бейдж скопирован"));
+        profCard.addView(line());
+
+        LinearLayout actRow = new LinearLayout(this);
+        actRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
+        ap.topMargin = dp(10);
+        actRow.setLayoutParams(ap);
+
+        TextView btnRefresh = buttonOutlined("Обновить данные");
+        btnRefresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                haptic(v);
+                StepHooks.onProfileStarted();
+                try {
+                    Class<?> c = Class.forName("com.blinkmap.mod.WorkBridge");
+                    c.getMethod("loadMyProfile", Context.class).invoke(null, getApplicationContext());
+                    Toast.makeText(ModSettingsActivity.this, "Запрос профиля...", Toast.LENGTH_SHORT).show();
+                    v.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (activeTab == TAB_PROFILE) renderTab(TAB_PROFILE, false);
+                        }
+                    }, 1400);
+                } catch (Throwable e) {
+                    StepHooks.onProfileError(e);
+                }
+            }
+        });
+
+        TextView btnToken = buttonPrimary("Вход по токену");
+        btnToken.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                TokenLoginOverlay.showTokenDialog(ModSettingsActivity.this);
+            }
+        });
+
+        TextView btnGms = buttonSecondary("Google (microG)");
+        btnGms.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                GmsCoreHelper.showGuideDialog(ModSettingsActivity.this);
+            }
+        });
+
+        actRow.addView(btnRefresh, new LinearLayout.LayoutParams(0, dp(44), 1f));
+        actRow.addView(btnToken, createMarginedParams(dp(8)));
+        actRow.addView(btnGms, createMarginedParams(dp(8)));
+        profCard.addView(actRow);
+
+        container.addView(profCard, bottomMargin(14));
+
+        // --- Mod Appearance Settings Card ---
+        LinearLayout uiCard = card();
+        sectionTitle(uiCard, "ИНТЕРФЕЙС И НАВИГАЦИЯ");
+
+        TextView navNote = textSmall("Кнопка мода нативно встроена в нижний бар (карта, друзья, чаты, чекины, ты, мод).");
+        uiCard.addView(navNote);
+
+        uiCard.addView(toggleRow("Плавающая кнопка",
+                "Включить дополнительную плавающую кнопку на экране",
+                "floating_enabled", false, new ToggleSwitchView.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                        if (MapPicker.mainActivity != null) {
+                            BlinkModButton.inject(MapPicker.mainActivity);
+                        }
+                    }
+                }));
+
+        uiCard.addView(line());
+        uiCard.addView(toggleRow("Плавающая кнопка слева",
+                "Разместить плавающую кнопку у левого края экрана",
+                "floating_left", false, new ToggleSwitchView.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                        if (MapPicker.mainActivity != null) {
+                            BlinkModButton.inject(MapPicker.mainActivity);
+                        }
+                    }
+                }));
+        container.addView(uiCard, bottomMargin(14));
+
+        // --- About Mod Card ---
+        LinearLayout aboutCard = card();
+        sectionTitle(aboutCard, "О МОДЕ");
+
+        TextView aboutDesc = textSmall("BlinkMod " + ModConfig.VERSION_PUBLIC + " — приватность, шаги и путешествия.");
+        aboutCard.addView(aboutDesc);
+
+        TextView tgBtn = buttonPrimary("Канал проекта @blinkmod");
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, dp(48));
+        tp.topMargin = dp(10);
+        tgBtn.setLayoutParams(tp);
+        tgBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/blinkmod")));
+                } catch (Throwable e) {
+                    Toast.makeText(ModSettingsActivity.this, "Не удалось открыть Telegram", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        aboutCard.addView(tgBtn);
+
+        container.addView(aboutCard, bottomMargin(14));
+    }
+
+    // =========================================================================
+    // 4. LAB (DEV / ADVANCED TAB)
+    // =========================================================================
+    private void renderLabTab(LinearLayout container) {
+        // API Check Card
+        LinearLayout apiCard = card();
+        sectionTitle(apiCard, "ВНУТРЕННИЙ API");
+
+        TextView checkBtn = buttonPrimary("Проверить соединение");
+        checkBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                haptic(v);
+                try {
+                    StepHooks.onApiCheckStarted();
+                    Class<?> c = Class.forName("com.blinkmap.mod.WorkBridge");
+                    c.getMethod("verifyNow", Context.class).invoke(null, getApplicationContext());
+                    Toast.makeText(ModSettingsActivity.this, "Проверка API...", Toast.LENGTH_SHORT).show();
+                    v.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (activeTab == TAB_LAB) renderTab(TAB_LAB, false);
+                        }
+                    }, 1500);
+                } catch (Throwable e) {
+                    StepHooks.onApiVerifyError(e);
+                }
+            }
+        });
+        apiCard.addView(checkBtn);
+        apiCard.addView(statusInfoRow("Состояние API", getSharedPreferences(PREFS, 0).getString("api_steps_state", "Проверок ещё не было")));
+        container.addView(apiCard, bottomMargin(14));
+
+        // Diagnostics Card
+        LinearLayout diagCard = card();
+        sectionTitle(diagCard, "СИСТЕМНЫЙ ОТЧЁТ");
+
+        TextView diagBtn = buttonOutlined("Скопировать диагностику");
+        diagBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("BlinkMod Diagnostics", generateDiagnostics()));
+                Toast.makeText(ModSettingsActivity.this, "Отчёт скопирован", Toast.LENGTH_SHORT).show();
+            }
+        });
+        diagCard.addView(diagBtn);
+        container.addView(diagCard, bottomMargin(14));
+
+        // Local Log Card
+        LinearLayout logCard = card();
+        sectionTitle(logCard, "ЖУРНАЛ СОБЫТИЙ");
+
+        String log = getSharedPreferences(PREFS, 0).getString("lab_log", "");
+        TextView logView = new TextView(this);
+        logView.setText(log.isEmpty() ? "Событий пока нет" : log);
+        logView.setTextSize(11);
+        logView.setTextColor(log.isEmpty() ? COLOR_ON_SURFACE_VARIANT : COLOR_ON_SURFACE);
+        logView.setTypeface(Typeface.MONOSPACE);
+        logView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        GradientDrawable logBg = new GradientDrawable();
+        logBg.setColor(COLOR_SURFACE_CONTAINER_LOW);
+        logBg.setCornerRadius(dp(12));
+        logBg.setStroke(dp(1), COLOR_OUTLINE);
+        logView.setBackground(logBg);
+        logCard.addView(logView);
+
+        TextView clearLogBtn = buttonOutlined("Очистить журнал");
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-1, dp(40));
+        clp.topMargin = dp(8);
+        clearLogBtn.setLayoutParams(clp);
+        clearLogBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                StepHooks.clearLog();
+                renderTab(TAB_LAB, false);
+            }
+        });
+        logCard.addView(clearLogBtn);
+
+        container.addView(logCard, bottomMargin(14));
+    }
+
+    private String generateDiagnostics() {
+        SharedPreferences p = getSharedPreferences(PREFS, 0);
+        String version = "?";
+        try {
+            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Throwable ignored) {}
+
+        return "BlinkMod " + ModConfig.getVersionDisplay(this) + "\n" +
+                "APK: " + version + " | Android " + Build.VERSION.SDK_INT + "\n" +
+                "Location: spoof=" + StepHooks.isSpoofingActive() + " pause=" + StepHooks.pauseStatus() + " drift=" + StepHooks.driftMode + "\n" +
+                "Battery: hide=" + StepHooks.hideCharge + " forced=" + StepHooks.forcedCharge + "\n" +
+                "Steps: enabled=" + p.getBoolean("network_steps_enabled", false) + " x" + p.getInt("network_steps_multiplier", 2) + "\n" +
+                "Hits: geoBlocked=" + StepHooks.locationBlockHits + " drift=" + StepHooks.driftHits + " charge=" + StepHooks.chargeFilterHits;
+    }
+
+    // =========================================================================
+    // MATERIAL DESIGN 3 SWITCH VIEW (52x32dp, track #36343B / Primary, thumb #938F99 / OnPrimary)
+    // =========================================================================
+    public static final class ToggleSwitchView extends View {
+        private boolean isChecked;
+        private float thumbProgress = 0f;
+        private ValueAnimator animator;
+        private OnCheckedChangeListener listener;
+
+        private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint trackBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF trackRect = new RectF();
+        private final RectF borderRect = new RectF();
+
+        public interface OnCheckedChangeListener {
+            void onCheckedChanged(ToggleSwitchView view, boolean checked);
+        }
+
+        public ToggleSwitchView(Context context) {
+            super(context);
+            trackBorderPaint.setStyle(Paint.Style.STROKE);
+            setClickable(false);
+            setFocusable(false);
+        }
+
+        public void setChecked(boolean checked, boolean animate) {
+            if (this.isChecked == checked && animator == null) return;
+            this.isChecked = checked;
+            float target = checked ? 1f : 0f;
+            if (animate) {
+                if (animator != null) animator.cancel();
+                animator = ValueAnimator.ofFloat(thumbProgress, target);
+                animator.setDuration(180);
+                animator.setInterpolator(new DecelerateInterpolator());
+                animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                    @Override
+                    public void onAnimationUpdate(ValueAnimator animation) {
+                        thumbProgress = (float) animation.getAnimatedValue();
+                        invalidate();
+                    }
+                });
+                animator.start();
+            } else {
+                thumbProgress = target;
+                invalidate();
+            }
+        }
+
+        public boolean isChecked() {
+            return isChecked;
+        }
+
+        public void toggle(boolean animate) {
+            setChecked(!isChecked, animate);
+            if (listener != null) {
+                listener.onCheckedChanged(this, isChecked);
+            }
+        }
+
+        public void setOnCheckedChangeListener(OnCheckedChangeListener l) {
+            this.listener = l;
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            float d = getResources().getDisplayMetrics().density;
+            setMeasuredDimension(Math.round(52 * d), Math.round(32 * d));
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            float d = getResources().getDisplayMetrics().density;
+            float w = getWidth();
+            float h = getHeight();
+            float radius = h / 2f;
+
+            // Track background interpolation: #36343B (off) -> Primary #D0BCFF (on)
+            int rTrack = (int) (Color.red(COLOR_SWITCH_TRACK_OFF) + thumbProgress * (Color.red(COLOR_PRIMARY) - Color.red(COLOR_SWITCH_TRACK_OFF)));
+            int gTrack = (int) (Color.green(COLOR_SWITCH_TRACK_OFF) + thumbProgress * (Color.green(COLOR_PRIMARY) - Color.green(COLOR_SWITCH_TRACK_OFF)));
+            int bTrack = (int) (Color.blue(COLOR_SWITCH_TRACK_OFF) + thumbProgress * (Color.blue(COLOR_PRIMARY) - Color.blue(COLOR_SWITCH_TRACK_OFF)));
+            trackPaint.setColor(Color.rgb(rTrack, gTrack, bTrack));
+
+            trackRect.set(0, 0, w, h);
+            canvas.drawRoundRect(trackRect, radius, radius, trackPaint);
+
+            // Subtle outline for unchecked state (fades out as it turns on)
+            if (thumbProgress < 0.99f) {
+                int outlineAlpha = Math.round((1f - thumbProgress) * 255f);
+                trackBorderPaint.setColor((outlineAlpha << 24) | (COLOR_OUTLINE & 0x00FFFFFF));
+                trackBorderPaint.setStrokeWidth(d);
+                float halfStroke = d / 2f;
+                borderRect.set(halfStroke, halfStroke, w - halfStroke, h - halfStroke);
+                canvas.drawRoundRect(borderRect, radius - halfStroke, radius - halfStroke, trackBorderPaint);
+            }
+
+            // Thumb color interpolation: #938F99 (off) -> OnPrimary #381E72 (on)
+            int rThumb = (int) (Color.red(COLOR_SWITCH_THUMB_OFF) + thumbProgress * (Color.red(COLOR_ON_PRIMARY) - Color.red(COLOR_SWITCH_THUMB_OFF)));
+            int gThumb = (int) (Color.green(COLOR_SWITCH_THUMB_OFF) + thumbProgress * (Color.green(COLOR_ON_PRIMARY) - Color.green(COLOR_SWITCH_THUMB_OFF)));
+            int bThumb = (int) (Color.blue(COLOR_SWITCH_THUMB_OFF) + thumbProgress * (Color.blue(COLOR_ON_PRIMARY) - Color.blue(COLOR_SWITCH_THUMB_OFF)));
+            thumbPaint.setColor(Color.rgb(rThumb, gThumb, bThumb));
+
+            // Thumb size: M3 specs: off = 16dp diameter (radius 8dp), on = 24dp diameter (radius 12dp)
+            float thumbRadius = (8f + 4f * thumbProgress) * d;
+            // Center X: off = 16dp, on = 36dp (w - 16dp)
+            float startX = 16f * d;
+            float endX = w - 16f * d;
+            float curX = startX + thumbProgress * (endX - startX);
+
+            canvas.drawCircle(curX, h / 2f, thumbRadius, thumbPaint);
+        }
+    }
+
+    // =========================================================================
+    // UI BUILDER HELPERS (MATERIAL DESIGN 3)
+    // =========================================================================
+    private LinearLayout card() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_SURFACE_CONTAINER);
+        bg.setCornerRadius(dp(16)); // M3 Large token (16dp)
+        bg.setStroke(dp(1), COLOR_OUTLINE_VARIANT); // M3 Subtle hairline border (1dp)
+        card.setBackground(bg);
+        int pad = dp(16);
+        card.setPadding(pad, pad, pad, pad);
+        return card;
+    }
+
+    private void sectionTitle(LinearLayout parent, String title) {
+        TextView tv = new TextView(this);
+        tv.setText(title);
+        tv.setTextSize(12);
+        tv.setTextColor(COLOR_PRIMARY);
+        tv.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        tv.setLetterSpacing(0.08f);
+        tv.setPadding(0, 0, 0, dp(10));
+        parent.addView(tv);
+    }
+
+    private TextView textSmall(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextSize(12);
+        tv.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        tv.setLineSpacing(dp(2), 1.15f);
+        return tv;
+    }
+
+    // M3 FilledButton: Primary (#D0BCFF) background, OnPrimary (#381E72) text, Full Pill
+    private TextView buttonPrimary(String text) {
+        TextView btn = new TextView(this);
+        btn.setText(text);
+        btn.setTextSize(14);
+        btn.setTextColor(COLOR_ON_PRIMARY);
+        btn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        btn.setGravity(Gravity.CENTER);
+        btn.setMinimumHeight(dp(48));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_PRIMARY);
+        bg.setCornerRadius(dp(24));
+        btn.setBackground(bg);
+        addTouchSpring(btn);
+        return btn;
+    }
+
+    // M3 TonalButton: Primary Container (#2B2E38) background, OnPrimary Container (#F0F1F5) text, Full Pill
+    private TextView buttonTonal(String text) {
+        TextView btn = new TextView(this);
+        btn.setText(text);
+        btn.setTextSize(12);
+        btn.setSingleLine(true);
+        btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        btn.setTextColor(COLOR_ON_PRIMARY_CONTAINER);
+        btn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        btn.setGravity(Gravity.CENTER);
+        btn.setMinimumHeight(dp(40));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_PRIMARY_CONTAINER);
+        bg.setCornerRadius(dp(20));
+        btn.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        btn.setLayoutParams(lp);
+        addTouchSpring(btn);
+        return btn;
+    }
+
+    // M3 OutlinedButton: Transparent background, Outline (#353844) 1dp border, OnSurface (#EDEDF2) text, Full Pill
+    private TextView buttonOutlined(String text) {
+        TextView btn = new TextView(this);
+        btn.setText(text);
+        btn.setTextSize(12);
+        btn.setSingleLine(true);
+        btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        btn.setTextColor(COLOR_ON_SURFACE);
+        btn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        btn.setGravity(Gravity.CENTER);
+        btn.setMinimumHeight(dp(40));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.TRANSPARENT);
+        bg.setCornerRadius(dp(20));
+        bg.setStroke(dp(1), COLOR_OUTLINE);
+        btn.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        btn.setLayoutParams(lp);
+        addTouchSpring(btn);
+        return btn;
+    }
+
+    private TextView buttonSecondary(String text) {
+        return buttonOutlined(text);
+    }
+
+    // M3 Segmented Button / Filter Chip Pill
+    private TextView createPill(String text, boolean selected) {
+        TextView pill = new TextView(this);
+        pill.setText(text);
+        pill.setTextSize(13);
+        pill.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        pill.setGravity(Gravity.CENTER);
+        pill.setTextColor(selected ? COLOR_ON_PRIMARY_CONTAINER : COLOR_ON_SURFACE_VARIANT);
+
+        GradientDrawable bg = new GradientDrawable();
+        if (selected) {
+            bg.setColor(COLOR_PRIMARY_CONTAINER);
+            bg.setStroke(dp(1), COLOR_PRIMARY);
+        } else {
+            bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+            bg.setStroke(dp(1), COLOR_OUTLINE);
+        }
+        bg.setCornerRadius(dp(19));
+        pill.setBackground(bg);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        pill.setLayoutParams(lp);
+        addTouchSpring(pill);
+        return pill;
+    }
+
+    private void updatePillStyle(TextView pill, boolean selected) {
+        if (pill == null) return;
+        pill.setTextColor(selected ? COLOR_ON_PRIMARY_CONTAINER : COLOR_ON_SURFACE_VARIANT);
+        GradientDrawable bg = new GradientDrawable();
+        if (selected) {
+            bg.setColor(COLOR_PRIMARY_CONTAINER);
+            bg.setStroke(dp(1), COLOR_PRIMARY);
+        } else {
+            bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+            bg.setStroke(dp(1), COLOR_OUTLINE);
+        }
+        bg.setCornerRadius(dp(19));
+        pill.setBackground(bg);
+    }
+
+    private void updateBadgeStyle(TextView b, int badgeColor) {
+        if (b == null) return;
+        b.setTextColor(badgeColor == COLOR_SUCCESS ? COLOR_ON_PRIMARY : COLOR_ON_SURFACE_VARIANT);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(badgeColor == COLOR_SUCCESS ? COLOR_SUCCESS : COLOR_SURFACE_CONTAINER_HIGH);
+        bg.setCornerRadius(dp(12));
+        if (badgeColor != COLOR_SUCCESS) {
+            bg.setStroke(dp(1), COLOR_OUTLINE);
+        }
+        b.setBackground(bg);
+    }
+
+    private View statusInfoRow(String label, String value) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(8), 0, dp(8));
+
+        TextView l = new TextView(this);
+        l.setText(label);
+        l.setTextSize(14);
+        l.setTextColor(COLOR_ON_SURFACE);
+        row.addView(l, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView v = new TextView(this);
+        v.setText(value);
+        v.setTextSize(13);
+        v.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        v.setGravity(Gravity.END);
+        row.addView(v, new LinearLayout.LayoutParams(-2, -2));
+        return row;
+    }
+
+    private View badgeStatusRow(String label, String badgeText, int badgeColor) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(6), 0, dp(6));
+
+        TextView l = new TextView(this);
+        l.setText(label);
+        l.setTextSize(14);
+        l.setTextColor(COLOR_ON_SURFACE);
+        row.addView(l, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView b = new TextView(this);
+        b.setText(badgeText);
+        b.setTextSize(12);
+        b.setTextColor(badgeColor == COLOR_SUCCESS ? COLOR_ON_PRIMARY : COLOR_ON_SURFACE_VARIANT);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setPadding(dp(12), dp(4), dp(12), dp(4));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(badgeColor == COLOR_SUCCESS ? COLOR_SUCCESS : COLOR_SURFACE_CONTAINER_HIGH);
+        bg.setCornerRadius(dp(12));
+        if (badgeColor != COLOR_SUCCESS) {
+            bg.setStroke(dp(1), COLOR_OUTLINE);
+        }
+        b.setBackground(bg);
+        row.addView(b, new LinearLayout.LayoutParams(-2, -2));
+        return row;
+    }
+
+    private View copyRow(String label, final String value, final String toastMsg) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(8), 0, dp(8));
+
+        TextView l = new TextView(this);
+        l.setText(label);
+        l.setTextSize(14);
+        l.setTextColor(COLOR_ON_SURFACE);
+        row.addView(l, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView v = new TextView(this);
+        v.setText(value);
+        v.setTextSize(13);
+        v.setTextColor(COLOR_PRIMARY);
+        v.setGravity(Gravity.END);
+        row.addView(v, new LinearLayout.LayoutParams(-2, -2));
+
+        row.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                if (!"—".equals(value)) {
+                    ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    cm.setPrimaryClip(ClipData.newPlainText("BlinkMod", value));
+                    Toast.makeText(ModSettingsActivity.this, toastMsg, Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        return row;
+    }
+
+    private View toggleRow(String title, String subtitle, final String prefKey, boolean defValue,
+                           final ToggleSwitchView.OnCheckedChangeListener extraListener) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(6), 0, dp(6));
+
+        LinearLayout textCol = new LinearLayout(this);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextSize(14);
+        t.setTextColor(COLOR_ON_SURFACE);
+        t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        textCol.addView(t);
+
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView s = new TextView(this);
+            s.setText(subtitle);
+            s.setTextSize(11);
+            s.setTextColor(COLOR_ON_SURFACE_VARIANT);
+            s.setPadding(0, dp(2), 0, 0);
+            textCol.addView(s);
+        }
+        row.addView(textCol, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        final ToggleSwitchView sw = new ToggleSwitchView(this);
+        boolean isChecked = getSharedPreferences(PREFS, 0).getBoolean(prefKey, defValue);
+        sw.setChecked(isChecked, false);
+
+        sw.setOnCheckedChangeListener(new ToggleSwitchView.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(ToggleSwitchView view, boolean checked) {
+                getSharedPreferences(PREFS, 0).edit().putBoolean(prefKey, checked).apply();
+                if (extraListener != null) {
+                    extraListener.onCheckedChanged(view, checked);
+                }
+            }
+        });
+
+        row.addView(sw, new LinearLayout.LayoutParams(-2, -2));
+        row.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                sw.toggle(true);
+            }
+        });
+        return row;
+    }
+
+    private View multiplierSelector(String title, final String prefKey, int[] multipliers) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(6), 0, dp(4));
+
+        TextView tv = new TextView(this);
+        tv.setText(title);
+        tv.setTextSize(13);
+        tv.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        box.addView(tv);
+
+        LinearLayout pills = new LinearLayout(this);
+        pills.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(-1, -2);
+        plp.topMargin = dp(8);
+        pills.setLayoutParams(plp);
+
+        int selected = getSharedPreferences(PREFS, 0).getInt(prefKey, 2);
+        final TextView[] pillsList = new TextView[multipliers.length];
+
+        for (int i = 0; i < multipliers.length; i++) {
+            final int index = i;
+            final int m = multipliers[i];
+            TextView pill = createPill("×" + m, selected == m);
+            pillsList[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            pills.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    getSharedPreferences(PREFS, 0).edit().putInt(prefKey, m).apply();
+                    for (int j = 0; j < pillsList.length; j++) {
+                        updatePillStyle(pillsList[j], j == index);
+                    }
+                }
+            });
+        }
+        box.addView(pills);
         return box;
     }
-    private View value2(String a,String b){LinearLayout r=row();r.addView(labels(a,b),new LinearLayout.LayoutParams(0,dp(70),1));TextView dot=text("●",13,PURPLE);dot.setGravity(Gravity.CENTER);r.addView(dot,new LinearLayout.LayoutParams(dp(32),dp(52)));return r;}
-    private View channelButton(){TextView x=text("Открыть канал  @blinkmod",17,PRIMARY);x.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.setGravity(Gravity.CENTER);x.setMinimumHeight(dp(60));x.setBackground(round(PURPLE,19));x.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){try{startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/blinkmod")));}catch(Throwable e){Toast.makeText(ModSettingsActivity.this,"Не удалось открыть ссылку",Toast.LENGTH_SHORT).show();}}});ripple(x);return x;}
-    private LinearLayout labels(String a,String b){LinearLayout x=new LinearLayout(this);x.setOrientation(LinearLayout.VERTICAL);x.setGravity(Gravity.CENTER_VERTICAL);TextView t=text(a,18,PRIMARY);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);x.addView(t);if(b!=null&&b.length()>0){TextView s=text(b,13,SECONDARY);s.setPadding(0,dp(1),0,0);x.addView(s);}return x;}
-    private LinearLayout row(){LinearLayout r=new LinearLayout(this);r.setGravity(Gravity.CENTER_VERTICAL);r.setPadding(dp(compact()?10:16),dp(compact()?2:5),dp(12),dp(compact()?2:5));r.setMinimumHeight(dp(compact()?60:72));return r;}
-    private LinearLayout group(){LinearLayout g=new LinearLayout(this);g.setOrientation(LinearLayout.VERTICAL);g.setBackground(round(Color.rgb(24,24,28),18));g.setClipToOutline(true);return g;}
-    private View line(){View v=new View(this);v.setBackgroundColor(DIVIDER);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(1));p.leftMargin=dp(18);v.setLayoutParams(p);return v;}
-    private void section(LinearLayout b,String s){TextView t=text(s,12,SECONDARY);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setLetterSpacing(.08f);t.setPadding(dp(6),dp(2),0,dp(9));b.addView(t);}
-    private void note(LinearLayout b,String s){TextView t=text(s,14,SECONDARY);t.setPadding(dp(16),0,dp(16),dp(12));b.addView(t);}
-    private String title(String p){if(UI.equals(p))return"Интерфейс";if(MAP.equals(p))return"Карта";if(PRIVACY.equals(p))return"Приватность";if(STEPS.equals(p))return"Шаги";if(CHAT.equals(p))return"Чаты";if(FRIENDS.equals(p))return"Друзья";if(PROFILE.equals(p))return"Мой профиль";if(USER.equals(p))return"Поиск пользователя";if(MISC.equals(p))return"Прочее";if(NAVIGATE.equals(p))return"Навигация по ID";if(CONFIG.equals(p))return"Конфигурация";if(LAB.equals(p))return"Blink Lab";if(ABOUT.equals(p))return"О BlinkMod";return"Настройки";}
-    private TextView text(String s,int z,int c){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(c);v.setGravity(Gravity.CENTER_VERTICAL);return v;}
-    private GradientDrawable round(int c,int r){GradientDrawable g=new GradientDrawable();g.setColor(c);g.setCornerRadius(dp(r));return g;}
-    private LinearLayout.LayoutParams bottom(int b){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(b);return p;}
-    private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
-    private boolean compact(){return getSharedPreferences(PREFS,0).getBoolean("compact",false);}
-    private int bg(){return getSharedPreferences(PREFS,0).getBoolean("amoled",true)?Color.BLACK:BASE_BG;}
-    private void ripple(View v){TypedValue t=new TypedValue();if(getTheme().resolveAttribute(android.R.attr.selectableItemBackground,t,true))v.setForeground(getDrawable(t.resourceId));}
 
-    private final class Icon extends View{
-        static final int UI=0,MAP=1,SHIELD=2,STEPS=3,LAB=4,INFO=5,CHAT=6,FRIENDS=7,PROFILE=8,CONFIG=9,USER=10,NAVIGATE=11,MISC=12;final int type;final Paint p=new Paint(1);final Path q=new Path();Icon(int t){super(ModSettingsActivity.this);type=t;p.setColor(Color.WHITE);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);}
-        @Override protected void onDraw(Canvas c){float x=getWidth()/2f,y=getHeight()/2f,s=Math.min(getWidth(),getHeight())*.28f;q.reset();if(type==UI){c.drawCircle(x,y,s,p);c.drawCircle(x,y,s*.35f,p);c.drawLine(x,y-s*1.35f,x,y-s,p);c.drawLine(x+s,y,x+s*1.35f,y,p);c.drawLine(x-s,y,x-s*1.35f,y,p);}else if(type==MAP){c.drawCircle(x,y,s,p);c.drawLine(x-s,y,x+s,y,p);c.drawOval(new RectF(x-s*.45f,y-s,x+s*.45f,y+s),p);}else if(type==SHIELD){q.moveTo(x,y-s);q.lineTo(x+s,y-s*.5f);q.lineTo(x+s*.75f,y+s*.55f);q.lineTo(x,y+s);q.lineTo(x-s*.75f,y+s*.55f);q.lineTo(x-s,y-s*.5f);q.close();c.drawPath(q,p);}else if(type==STEPS){c.drawOval(new RectF(x-s*.9f,y-s*.15f,x+s*.1f,y+s*.75f),p);c.drawOval(new RectF(x-s*.15f,y-s*.8f,x+s*.75f,y+s*.05f),p);}else if(type==CHAT){q.moveTo(x-s,y-s*.7f);q.lineTo(x+s,y-s*.7f);q.lineTo(x+s,y+s*.45f);q.lineTo(x+s*.25f,y+s*.45f);q.lineTo(x-s*.35f,y+s);q.lineTo(x-s*.2f,y+s*.45f);q.lineTo(x-s,y+s*.45f);q.close();c.drawPath(q,p);}else if(type==MISC){c.drawCircle(x-s*.65f,y,s*.13f,p);c.drawCircle(x,y,s*.13f,p);c.drawCircle(x+s*.65f,y,s*.13f,p);}else if(type==NAVIGATE){c.drawCircle(x-s*.3f,y-s*.3f,s*.55f,p);c.drawLine(x+s*.12f,y+s*.12f,x+s*.85f,y+s*.85f,p);c.drawLine(x-s*.3f,y-s*.68f,x-s*.3f,y-s*.05f,p);c.drawLine(x-s*.62f,y-s*.36f,x+s*.02f,y-s*.36f,p);}else if(type==USER){c.drawCircle(x-s*.2f,y-s*.42f,s*.34f,p);c.drawArc(new RectF(x-s*.85f,y,x+s*.45f,y+s),195,145,false,p);c.drawCircle(x+s*.5f,y+s*.35f,s*.33f,p);c.drawLine(x+s*.72f,y+s*.58f,x+s,y+s*.88f,p);}else if(type==CONFIG){c.drawRect(new RectF(x-s*.75f,y-s*.9f,x+s*.75f,y+s*.9f),p);c.drawLine(x-s*.45f,y-s*.35f,x+s*.45f,y-s*.35f,p);c.drawLine(x-s*.45f,y,x+s*.45f,y,p);c.drawLine(x-s*.45f,y+s*.35f,x+s*.15f,y+s*.35f,p);}else if(type==PROFILE){c.drawCircle(x,y-s*.48f,s*.36f,p);c.drawArc(new RectF(x-s,y-s*.02f,x+s,y+s),195,150,false,p);}else if(type==FRIENDS){c.drawCircle(x-s*.38f,y-s*.48f,s*.32f,p);c.drawCircle(x+s*.42f,y-s*.35f,s*.27f,p);c.drawArc(new RectF(x-s,y-s*.05f,x+s*.25f,y+s),195,150,false,p);c.drawArc(new RectF(x-s*.15f,y,x+s,y+s*.88f),200,135,false,p);}else if(type==LAB){q.moveTo(x-s*.35f,y-s);q.lineTo(x+s*.35f,y-s);q.moveTo(x-s*.15f,y-s);q.lineTo(x-s*.15f,y-s*.25f);q.lineTo(x-s*.75f,y+s*.75f);q.lineTo(x+s*.75f,y+s*.75f);q.lineTo(x+s*.15f,y-s*.25f);q.lineTo(x+s*.15f,y-s);c.drawPath(q,p);c.drawLine(x-s*.48f,y+s*.28f,x+s*.48f,y+s*.28f,p);}else{c.drawCircle(x,y,s,p);c.drawCircle(x,y-s*.4f,dp(2),p);c.drawLine(x,y-s*.05f,x,y+s*.55f,p);}}
+    private void showCustomStepsDialog(final TextView postStepsBtn, final TextView[] presetPills, final TextView customPill) {
+        final SharedPreferences sp = getSharedPreferences(PREFS, 0);
+        int current = sp.getInt("target_steps_count", 100000);
+
+        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(22), dp(20), dp(22), dp(20));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        bg.setCornerRadius(dp(22));
+        bg.setStroke(dp(1), COLOR_OUTLINE);
+        layout.setBackground(bg);
+
+        TextView title = new TextView(this);
+        title.setText("Количество шагов");
+        title.setTextSize(18);
+        title.setTextColor(COLOR_ON_SURFACE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        layout.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Введите целевое число шагов (от 100 до 500 000):");
+        subtitle.setTextSize(13);
+        subtitle.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        subtitle.setPadding(0, dp(4), 0, dp(14));
+        layout.addView(subtitle);
+
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(current));
+        input.setTextColor(COLOR_ON_SURFACE);
+        input.setTextSize(17);
+        input.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        input.setPadding(dp(16), dp(12), dp(16), dp(12));
+        GradientDrawable inputBg = new GradientDrawable();
+        inputBg.setColor(COLOR_SURFACE_CONTAINER);
+        inputBg.setCornerRadius(dp(12));
+        inputBg.setStroke(dp(1), COLOR_OUTLINE_VARIANT);
+        input.setBackground(inputBg);
+        layout.addView(input);
+
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        buttons.setPadding(0, dp(18), 0, 0);
+
+        TextView cancelBtn = buttonOutlined("Отмена");
+        TextView okBtn = buttonPrimary("Применить");
+
+        buttons.addView(cancelBtn, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        LinearLayout.LayoutParams okLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
+        okLp.leftMargin = dp(8);
+        buttons.addView(okBtn, okLp);
+        layout.addView(buttons);
+
+        builder.setView(layout);
+        final AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        cancelBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                dialog.dismiss();
+            }
+        });
+
+        okBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                try {
+                    String s = input.getText().toString().trim();
+                    if (!s.isEmpty()) {
+                        int val = Integer.parseInt(s);
+                        if (val < 100) val = 100;
+                        if (val > 1000000) val = 1000000;
+                        sp.edit().putInt("target_steps_count", val).apply();
+                        dialog.dismiss();
+                        if (postStepsBtn != null) {
+                            postStepsBtn.setText("Отправить " + String.format(Locale.US, "%,d", val).replace(',', ' ') + " шагов");
+                        }
+                        if (presetPills != null) {
+                            for (TextView p : presetPills) updatePillStyle(p, false);
+                        }
+                        if (customPill != null) {
+                            customPill.setText(val >= 1000 ? (val / 1000 + "k") : String.valueOf(val));
+                            updatePillStyle(customPill, true);
+                        }
+                    }
+                } catch (Throwable e) {
+                    Toast.makeText(ModSettingsActivity.this, "Введите корректное число", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        dialog.show();
+    }
+
+    private void renderFollowerCard(LinearLayout container, final Runnable updateGeoHeader) {
+        final SharedPreferences sp = getSharedPreferences(PREFS, 0);
+        final LinearLayout stalkerCard = card();
+        sectionTitle(stalkerCard, "ПРЕСЛЕДОВАНИЕ И ОРБИТА ДРУГА");
+
+        TextView desc = textSmall("Автоматическое преследование выбранного друга: хоровод по орбите вокруг него, тень сзади или режим в кармане с генерацией шагов.");
+        stalkerCard.addView(desc);
+
+        boolean isFollowing = FriendFollower.isRunning();
+        FriendFollower.FriendTarget current = FriendFollower.getCurrentTarget();
+        String targetName = (isFollowing && current != null) ? current.getDisplayName() : "Выключено";
+
+        View statusBadge = badgeStatusRow("Статус преследования",
+                targetName,
+                isFollowing ? COLOR_SUCCESS : COLOR_ON_SURFACE_VARIANT);
+        final TextView statusBadgeText = (TextView) ((LinearLayout) statusBadge).getChildAt(1);
+        stalkerCard.addView(statusBadge);
+
+        View detailsRow = statusInfoRow("Параметры", FriendFollower.getStatusText());
+        final TextView detailsValText = (TextView) ((LinearLayout) detailsRow).getChildAt(1);
+        stalkerCard.addView(detailsRow);
+        stalkerCard.addView(line());
+
+        // Mode Selector Pills: [Хоровод] [Тень] [В кармане]
+        TextView modeLabel = textSmall("Режим перемещения");
+        modeLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        stalkerCard.addView(modeLabel);
+
+        LinearLayout modePills = new LinearLayout(this);
+        modePills.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams mpLp = new LinearLayout.LayoutParams(-1, -2);
+        mpLp.topMargin = dp(6);
+        mpLp.bottomMargin = dp(10);
+        modePills.setLayoutParams(mpLp);
+
+        final int savedMode = sp.getInt("follower_mode", FriendFollower.MODE_ORBIT);
+        final int[] modes = {FriendFollower.MODE_ORBIT, FriendFollower.MODE_SHADOW, FriendFollower.MODE_POCKET};
+        final String[] modeLabels = {"Хоровод", "Тень", "В кармане"};
+        final TextView[] modePillsList = new TextView[modes.length];
+
+        for (int i = 0; i < modes.length; i++) {
+            final int index = i;
+            final int m = modes[i];
+            TextView pill = createPill(modeLabels[i], savedMode == m);
+            modePillsList[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            modePills.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    sp.edit().putInt("follower_mode", m).apply();
+                    for (int j = 0; j < modePillsList.length; j++) {
+                        updatePillStyle(modePillsList[j], j == index);
+                    }
+                    if (FriendFollower.isRunning()) {
+                        FriendFollower.startFollow(ModSettingsActivity.this,
+                                FriendFollower.getCurrentTarget(),
+                                m,
+                                sp.getFloat("follower_radius", FriendFollower.RADIUS_MEDIUM),
+                                sp.getFloat("follower_speed", FriendFollower.SPEED_WALK),
+                                createFollowerListener(statusBadgeText, detailsValText, updateGeoHeader));
+                    }
+                    detailsValText.setText(FriendFollower.getStatusText());
+                    updateGeoHeader.run();
+                }
+            });
+        }
+        stalkerCard.addView(modePills);
+
+        // Radius Selector Pills: [10м] [25м] [50м] [100м]
+        TextView radiusLabel = textSmall("Радиус орбиты / дистанция");
+        radiusLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        stalkerCard.addView(radiusLabel);
+
+        LinearLayout radiusPills = new LinearLayout(this);
+        radiusPills.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rpLp = new LinearLayout.LayoutParams(-1, -2);
+        rpLp.topMargin = dp(6);
+        rpLp.bottomMargin = dp(10);
+        radiusPills.setLayoutParams(rpLp);
+
+        final float savedRadius = sp.getFloat("follower_radius", FriendFollower.RADIUS_MEDIUM);
+        final float[] radiuses = {FriendFollower.RADIUS_CLOSE, FriendFollower.RADIUS_MEDIUM, FriendFollower.RADIUS_DISTANT, FriendFollower.RADIUS_WIDE};
+        final String[] radiusLabels = {"10 м", "25 м", "50 м", "100 м"};
+        final TextView[] radiusPillsList = new TextView[radiuses.length];
+
+        for (int i = 0; i < radiuses.length; i++) {
+            final int index = i;
+            final float r = radiuses[i];
+            TextView pill = createPill(radiusLabels[i], Math.abs(savedRadius - r) < 1f);
+            radiusPillsList[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            radiusPills.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    sp.edit().putFloat("follower_radius", r).apply();
+                    for (int j = 0; j < radiusPillsList.length; j++) {
+                        updatePillStyle(radiusPillsList[j], j == index);
+                    }
+                    if (FriendFollower.isRunning()) {
+                        FriendFollower.startFollow(ModSettingsActivity.this,
+                                FriendFollower.getCurrentTarget(),
+                                sp.getInt("follower_mode", FriendFollower.MODE_ORBIT),
+                                r,
+                                sp.getFloat("follower_speed", FriendFollower.SPEED_WALK),
+                                createFollowerListener(statusBadgeText, detailsValText, updateGeoHeader));
+                    }
+                    detailsValText.setText(FriendFollower.getStatusText());
+                    updateGeoHeader.run();
+                }
+            });
+        }
+        stalkerCard.addView(radiusPills);
+
+        // Speed Selector Pills: [Шаг 4.5] [Бег 12] [Вело 22] [Авто 48]
+        TextView speedLabel = textSmall("Скорость движения");
+        speedLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        stalkerCard.addView(speedLabel);
+
+        LinearLayout speedPills = new LinearLayout(this);
+        speedPills.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams spLp = new LinearLayout.LayoutParams(-1, -2);
+        spLp.topMargin = dp(6);
+        spLp.bottomMargin = dp(12);
+        speedPills.setLayoutParams(spLp);
+
+        final float savedSpeed = sp.getFloat("follower_speed", FriendFollower.SPEED_WALK);
+        final float[] speeds = {FriendFollower.SPEED_WALK, FriendFollower.SPEED_RUN, FriendFollower.SPEED_BIKE, FriendFollower.SPEED_CAR};
+        final String[] speedLabels = {"Шаг 4.5", "Бег 12", "Вело 22", "Авто 48"};
+        final TextView[] speedPillsList = new TextView[speeds.length];
+
+        for (int i = 0; i < speeds.length; i++) {
+            final int index = i;
+            final float s = speeds[i];
+            TextView pill = createPill(speedLabels[i], Math.abs(savedSpeed - s) < 1f);
+            speedPillsList[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            speedPills.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    sp.edit().putFloat("follower_speed", s).apply();
+                    for (int j = 0; j < speedPillsList.length; j++) {
+                        updatePillStyle(speedPillsList[j], j == index);
+                    }
+                    if (FriendFollower.isRunning()) {
+                        FriendFollower.startFollow(ModSettingsActivity.this,
+                                FriendFollower.getCurrentTarget(),
+                                sp.getInt("follower_mode", FriendFollower.MODE_ORBIT),
+                                sp.getFloat("follower_radius", FriendFollower.RADIUS_MEDIUM),
+                                s,
+                                createFollowerListener(statusBadgeText, detailsValText, updateGeoHeader));
+                    }
+                    detailsValText.setText(FriendFollower.getStatusText());
+                    updateGeoHeader.run();
+                }
+            });
+        }
+        stalkerCard.addView(speedPills);
+
+        // Action Buttons Row
+        LinearLayout actionRow = new LinearLayout(this);
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams apLp = new LinearLayout.LayoutParams(-1, -2);
+        apLp.topMargin = dp(4);
+        actionRow.setLayoutParams(apLp);
+
+        final TextView btnChoose = buttonPrimary(isFollowing ? "Сменить цель" : "Выбрать друга для слежки");
+        actionRow.addView(btnChoose, new LinearLayout.LayoutParams(0, dp(44), 1f));
+
+        final TextView btnStop = buttonOutlined("Остановить");
+        btnStop.setVisibility(isFollowing ? View.VISIBLE : View.GONE);
+        LinearLayout.LayoutParams stopLp = new LinearLayout.LayoutParams(0, dp(44), 0.6f);
+        stopLp.leftMargin = dp(8);
+        actionRow.addView(btnStop, stopLp);
+
+        btnChoose.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                showFriendChooserDialog(new Runnable() {
+                    @Override
+                    public void run() {
+                        boolean active = FriendFollower.isRunning();
+                        FriendFollower.FriendTarget tgt = FriendFollower.getCurrentTarget();
+                        statusBadgeText.setText(active && tgt != null ? ("В орбите: " + tgt.getDisplayName()) : "Выключено");
+                        updateBadgeStyle(statusBadgeText, active ? COLOR_SUCCESS : COLOR_ON_SURFACE_VARIANT);
+                        detailsValText.setText(FriendFollower.getStatusText());
+                        btnChoose.setText(active ? "Сменить цель" : "Выбрать друга для слежки");
+                        btnStop.setVisibility(active ? View.VISIBLE : View.GONE);
+                        updateGeoHeader.run();
+                    }
+                }, updateGeoHeader, statusBadgeText, detailsValText);
+            }
+        });
+
+        btnStop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                FriendFollower.stopFollow(ModSettingsActivity.this);
+                statusBadgeText.setText("Выключено");
+                updateBadgeStyle(statusBadgeText, COLOR_ON_SURFACE_VARIANT);
+                detailsValText.setText("Выключено");
+                btnChoose.setText("Выбрать друга для слежки");
+                btnStop.setVisibility(View.GONE);
+                Toast.makeText(ModSettingsActivity.this, "Преследование остановлено", Toast.LENGTH_SHORT).show();
+                updateGeoHeader.run();
+            }
+        });
+
+        stalkerCard.addView(actionRow);
+        container.addView(stalkerCard, bottomMargin(14));
+
+        if (FriendFollower.isRunning()) {
+            FriendFollower.setListener(createFollowerListener(statusBadgeText, detailsValText, updateGeoHeader));
+        }
+    }
+
+    private FriendFollower.FollowListener createFollowerListener(final TextView badgeText, final TextView detailsText, final Runnable updateGeoHeader) {
+        return new FriendFollower.FollowListener() {
+            @Override
+            public void onFollowTick(FriendFollower.FriendTarget target, double lat, double lon, int stepsAdded) {
+                if (!isFinishing() && activeTab == TAB_GHOST) {
+                    if (detailsText != null) {
+                        detailsText.setText(FriendFollower.getStatusText());
+                    }
+                    if (updateGeoHeader != null) {
+                        updateGeoHeader.run();
+                    }
+                }
+            }
+
+            @Override
+            public void onFollowStopped() {
+                if (!isFinishing() && activeTab == TAB_GHOST) {
+                    if (badgeText != null) {
+                        badgeText.setText("Выключено");
+                        updateBadgeStyle(badgeText, COLOR_ON_SURFACE_VARIANT);
+                    }
+                    if (detailsText != null) {
+                        detailsText.setText("Выключено");
+                    }
+                    if (updateGeoHeader != null) {
+                        updateGeoHeader.run();
+                    }
+                }
+            }
+        };
+    }
+
+    private void showFriendChooserDialog(final Runnable onChosen, final Runnable updateGeoHeader, final TextView badgeText, final TextView detailsText) {
+        final List<FriendFollower.FriendTarget> friends = FriendFollower.loadFriends(this);
+        if (friends.isEmpty()) {
+            Toast.makeText(this, "Друзья с координатами не найдены в базе. Откройте карту Blink!", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(18), dp(20), dp(18));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        bg.setCornerRadius(dp(24));
+        bg.setStroke(dp(1), COLOR_OUTLINE);
+        root.setBackground(bg);
+
+        TextView title = new TextView(this);
+        title.setText("Выберите друга");
+        title.setTextSize(18);
+        title.setTextColor(COLOR_ON_SURFACE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        root.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Доступно друзей на карте: " + friends.size());
+        subtitle.setTextSize(13);
+        subtitle.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        subtitle.setPadding(0, dp(4), 0, dp(14));
+        root.addView(subtitle);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+
+        builder.setView(root);
+        final AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        final SharedPreferences sp = getSharedPreferences(PREFS, 0);
+
+        for (final FriendFollower.FriendTarget friend : friends) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(12), dp(10), dp(12), dp(10));
+            GradientDrawable rowBg = new GradientDrawable();
+            rowBg.setColor(COLOR_SURFACE_CONTAINER);
+            rowBg.setCornerRadius(dp(16));
+            rowBg.setStroke(dp(1), COLOR_OUTLINE_VARIANT);
+            row.setBackground(rowBg);
+
+            // Avatar placeholder with letter
+            FrameLayout avatar = new FrameLayout(this);
+            GradientDrawable avBg = new GradientDrawable();
+            avBg.setColor(friend.isOnline ? 0xFF1B3D2F : COLOR_PRIMARY_CONTAINER);
+            avBg.setCornerRadius(dp(18));
+            avBg.setStroke(dp(1), friend.isOnline ? COLOR_SUCCESS : COLOR_OUTLINE);
+            avatar.setBackground(avBg);
+
+            TextView avLetter = new TextView(this);
+            String initial = friend.getDisplayName().replaceAll("^@", "");
+            avLetter.setText(initial.isEmpty() ? "?" : initial.substring(0, 1).toUpperCase(Locale.US));
+            avLetter.setTextSize(14);
+            avLetter.setTextColor(friend.isOnline ? COLOR_SUCCESS : COLOR_ON_PRIMARY_CONTAINER);
+            avLetter.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            FrameLayout.LayoutParams lpLetter = new FrameLayout.LayoutParams(-2, -2);
+            lpLetter.gravity = Gravity.CENTER;
+            avatar.addView(avLetter, lpLetter);
+
+            row.addView(avatar, new LinearLayout.LayoutParams(dp(36), dp(36)));
+
+            // Text Info Box
+            LinearLayout textBox = new LinearLayout(this);
+            textBox.setOrientation(LinearLayout.VERTICAL);
+            textBox.setPadding(dp(12), 0, dp(8), 0);
+
+            TextView name = new TextView(this);
+            name.setText(friend.getDisplayName());
+            name.setTextSize(15);
+            name.setTextColor(COLOR_ON_SURFACE);
+            name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            textBox.addView(name);
+
+            TextView secondary = new TextView(this);
+            secondary.setText(friend.getSecondaryText());
+            secondary.setTextSize(12);
+            secondary.setTextColor(friend.isOnline ? COLOR_SUCCESS : COLOR_ON_SURFACE_VARIANT);
+            textBox.addView(secondary);
+
+            row.addView(textBox, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            // Select arrow
+            TextView arrow = new TextView(this);
+            arrow.setText("›");
+            arrow.setTextSize(18);
+            arrow.setTextColor(COLOR_ON_SURFACE_VARIANT);
+            row.addView(arrow);
+
+            addTouchSpring(row);
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    dialog.dismiss();
+                    int mode = sp.getInt("follower_mode", FriendFollower.MODE_ORBIT);
+                    float radius = sp.getFloat("follower_radius", FriendFollower.RADIUS_MEDIUM);
+                    float speed = sp.getFloat("follower_speed", FriendFollower.SPEED_WALK);
+
+                    FriendFollower.startFollow(ModSettingsActivity.this, friend, mode, radius, speed,
+                            createFollowerListener(badgeText, detailsText, updateGeoHeader));
+
+                    Toast.makeText(ModSettingsActivity.this, "🎯 Преследуем " + friend.getDisplayName(), Toast.LENGTH_SHORT).show();
+                    if (onChosen != null) onChosen.run();
+                }
+            });
+
+            LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(-1, -2);
+            rLp.bottomMargin = dp(8);
+            list.addView(row, rLp);
+        }
+
+        scroll.addView(list);
+        int maxListHeight = dp(360);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, Math.min(friends.size() * dp(64), maxListHeight)));
+
+        TextView cancelBtn = buttonOutlined("Закрыть");
+        cancelBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                dialog.dismiss();
+            }
+        });
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(-1, dp(42));
+        cLp.topMargin = dp(12);
+        root.addView(cancelBtn, cLp);
+
+        dialog.show();
+    }
+
+    @Override
+    protected void onDestroy() {
+        FriendFollower.setListener(null);
+        super.onDestroy();
+    }
+
+    private View line() {
+        View v = new View(this);
+        v.setBackgroundColor(COLOR_OUTLINE_VARIANT);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(1));
+        lp.topMargin = dp(8);
+        lp.bottomMargin = dp(8);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    private LinearLayout.LayoutParams bottomMargin(int marginDp) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(marginDp);
+        return lp;
+    }
+
+    private LinearLayout.LayoutParams createMarginedParams(int leftMarginDp) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        lp.leftMargin = leftMarginDp;
+        return lp;
+    }
+
+    private int dp(int val) {
+        return Math.round(val * getResources().getDisplayMetrics().density);
+    }
+
+    private void haptic(View v) {
+        if (v != null) {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        }
     }
 }
