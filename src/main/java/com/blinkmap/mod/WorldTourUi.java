@@ -17,12 +17,15 @@ import android.widget.Toast;
 import java.util.List;
 
 public final class WorldTourUi {
-    private static final int BASE_BG = Color.rgb(22, 22, 28);
-    private static final int SECONDARY = Color.rgb(142, 142, 160);
-    private static final int DIVIDER = Color.rgb(44, 44, 56);
-    private static final int PURPLE = Color.rgb(138, 92, 255);
-    private static final int CARD_BG = Color.rgb(32, 32, 40);
-    private static final int GOLD = Color.rgb(255, 204, 0);
+    private static final int BASE_BG = 0xFF0D0E11;
+    private static final int SECONDARY = 0xFF8A8D98;
+    private static final int DIVIDER = 0xFF22242D;
+    private static final int PRIMARY = 0xFFF0F1F5;
+    private static final int CARD_BG = 0xFF18191F;
+    private static final int CARD_INNER_BG = 0xFF131418;
+    private static final int OUTLINE = 0xFF353844;
+    private static final int OUTLINE_VARIANT = 0xFF1C1E25;
+    private static final int GOLD = 0xFFE5C07B;
 
     private static long currentDelay = 6000L; // default 6s for Blink backend ingestion
 
@@ -38,6 +41,7 @@ public final class WorldTourUi {
         GradientDrawable cardBg = new GradientDrawable();
         cardBg.setColor(CARD_BG);
         cardBg.setCornerRadius(dp(activity, 16));
+        cardBg.setStroke(dp(activity, 1), OUTLINE_VARIANT);
         card.setBackground(cardBg);
         int pad = dp(activity, 16);
         card.setPadding(pad, pad, pad, pad);
@@ -52,7 +56,7 @@ public final class WorldTourUi {
         TextView title = new TextView(activity);
         title.setText("МИРОВОЕ ТУРНЕ");
         title.setTextSize(14);
-        title.setTextColor(PURPLE);
+        title.setTextColor(PRIMARY);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         card.addView(title);
 
@@ -69,8 +73,9 @@ public final class WorldTourUi {
         final LinearLayout statsBox = new LinearLayout(activity);
         statsBox.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable statsBg = new GradientDrawable();
-        statsBg.setColor(Color.rgb(24, 24, 30));
+        statsBg.setColor(CARD_INNER_BG);
         statsBg.setCornerRadius(dp(activity, 12));
+        statsBg.setStroke(dp(activity, 1), OUTLINE_VARIANT);
         statsBox.setBackground(statsBg);
         int sbPad = dp(activity, 12);
         statsBox.setPadding(sbPad, sbPad, sbPad, sbPad);
@@ -93,6 +98,16 @@ public final class WorldTourUi {
         subLp.topMargin = dp(activity, 3);
         statsBox.addView(statsSub, subLp);
 
+        // MD3 Progress Bar for Visited Countries
+        final Md3ProgressBar progressBar = new Md3ProgressBar(activity);
+        progressBar.setColors(0xFF2C2F3A, PRIMARY, 0xFF5A5E70);
+        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(activity, 8));
+        pbLp.topMargin = dp(activity, 10);
+        pbLp.bottomMargin = dp(activity, 4);
+        progressBar.setLayoutParams(pbLp);
+        statsBox.addView(progressBar);
+
         // Sub-buttons inside stats box: Sync & View missing list
         LinearLayout statsBtns = new LinearLayout(activity);
         statsBtns.setOrientation(LinearLayout.HORIZONTAL);
@@ -101,10 +116,12 @@ public final class WorldTourUi {
         sbLp.topMargin = dp(activity, 10);
         statsBtns.setLayoutParams(sbLp);
 
-        final TextView btnSync = createPillButton(activity, "🔄 Синхронизировать");
-        final TextView btnShowMissing = createPillButton(activity, "📋 Недостающие страны");
+        final TextView btnSync = createPillButton(activity, "Обновить");
+        final TextView btnShowMissing = createPillButton(activity, "Осталось (25)");
+        final TextView btnDump = createPillButton(activity, "Дамп");
         statsBtns.addView(btnSync);
         statsBtns.addView(btnShowMissing);
+        statsBtns.addView(btnDump);
         statsBox.addView(statsBtns);
         card.addView(statsBox);
 
@@ -112,7 +129,7 @@ public final class WorldTourUi {
         final TextView statusView = new TextView(activity);
         statusView.setText(WorldTour.getStatusText());
         statusView.setTextSize(13);
-        statusView.setTextColor(Color.WHITE);
+        statusView.setTextColor(PRIMARY);
         statusView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -126,15 +143,18 @@ public final class WorldTourUi {
             public void run() {
                 VisitedCountriesManager.CountryStats stats = VisitedCountriesManager.getStats(activity);
                 if (stats.missingCount == 0 && stats.visitedCount > 0) {
-                    statsMain.setText("🏆 Все страны мира посещены! (ТОП-1)");
+                    statsMain.setText("Все страны мира посещены (ТОП-1)");
                     statsMain.setTextColor(GOLD);
                 } else if (stats.visitedCount > 0) {
-                    statsMain.setText("🗺️ Посещено: " + stats.visitedCount + " / " + stats.totalWorldCountries + " (осталось: " + stats.missingCount + ")");
-                    statsMain.setTextColor(Color.WHITE);
+                    statsMain.setText("Посещено: " + stats.visitedCount + " / " + stats.totalWorldCountries + " (осталось: " + stats.missingCount + ")");
+                    statsMain.setTextColor(PRIMARY);
                 } else {
-                    statsMain.setText("🗺️ Посещено: 0 / " + stats.totalWorldCountries + " (требуется синхронизация)");
+                    statsMain.setText("Посещено: 0 / " + stats.totalWorldCountries + " (требуется синхронизация)");
                     statsMain.setTextColor(SECONDARY);
                 }
+
+                float pct = stats.totalWorldCountries > 0 ? (float) stats.visitedCount / (float) stats.totalWorldCountries : 0f;
+                progressBar.setProgress(pct, true);
 
                 String timeText = stats.lastSyncTime > 0L ?
                     android.text.format.DateUtils.getRelativeTimeSpanString(stats.lastSyncTime).toString() :
@@ -142,7 +162,7 @@ public final class WorldTourUi {
                 String srcText = (stats.source != null && !stats.source.isEmpty()) ? " • " + stats.source : "";
                 statsSub.setText("Синхронизация: " + timeText + srcText);
 
-                btnShowMissing.setText("📋 Недостающие (" + stats.missingCount + ")");
+                btnShowMissing.setText("Осталось (" + stats.missingCount + ")");
             }
         };
 
@@ -166,14 +186,16 @@ public final class WorldTourUi {
         btnSync.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                btnSync.setText("🔄 Загрузка...");
+                btnSync.setText("Загрузка...");
+                progressBar.setIndeterminate(true);
                 VisitedCountriesManager.syncFromServerAsync(activity, new VisitedCountriesManager.SyncCallback() {
                     @Override
                     public void onSuccess(final VisitedCountriesManager.CountryStats stats) {
                         mainHandler.post(new Runnable() {
                             @Override
                             public void run() {
-                                btnSync.setText("🔄 Синхронизировать");
+                                btnSync.setText("Обновить");
+                                progressBar.setIndeterminate(false);
                                 updateStatus.run();
                                 Toast.makeText(activity, "Синхронизировано: " + stats.visitedCount + " стран!", Toast.LENGTH_SHORT).show();
                             }
@@ -185,7 +207,8 @@ public final class WorldTourUi {
                         mainHandler.post(new Runnable() {
                             @Override
                             public void run() {
-                                btnSync.setText("🔄 Синхронизировать");
+                                btnSync.setText("Обновить");
+                                progressBar.setIndeterminate(false);
                                 updateStatus.run();
                                 Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
                             }
@@ -205,6 +228,27 @@ public final class WorldTourUi {
                         mainHandler.post(updateStatus);
                     }
                 });
+            }
+        });
+
+        // Dump Map click
+        btnDump.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                btnDump.setText("Дамп...");
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        final String res = VisitedCountriesManager.dumpMapData(activity);
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                btnDump.setText("Дамп");
+                                Toast.makeText(activity, res, Toast.LENGTH_LONG).show();
+                            }
+                        });
+                    }
+                }, "BlinkMod-MapDumper").start();
             }
         });
 
@@ -277,7 +321,7 @@ public final class WorldTourUi {
         // --- DEV-ONLY ACTIONS (Gated behind ModConfig.isDevMode) ---
         if (ModConfig.isDevMode(activity)) {
             // Action 0: DYNAMIC TOUR OVER MISSING COUNTRIES ONLY
-            View btnMissingTour = createActionButton(activity, "🎯 ВЗЯТЬ НЕДОСТАЮЩИЕ СТРАНЫ (только новые)", GOLD, new View.OnClickListener() {
+            View btnMissingTour = createActionButton(activity, "ВЗЯТЬ НЕДОСТАЮЩИЕ СТРАНЫ", GOLD, new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     List<WorldTour.City> missing = VisitedCountriesManager.getMissingCountries(activity);
@@ -298,7 +342,7 @@ public final class WorldTourUi {
             card.addView(btnMissingTour);
 
             // Action 0.5: SNIPER TOP-1 BOOST (42 sovereign guaranteed targets)
-            View btnTop1 = createActionButton(activity, "🏆 СНАЙПЕР ТОП-1 МИРА (42 страны)", GOLD, new View.OnClickListener() {
+            View btnTop1 = createActionButton(activity, "СНАЙПЕР ТОП-1 (42 страны)", GOLD, new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     WorldTour.start(activity, WorldTour.MODE_TOP1_BOOST, currentDelay, new Runnable() {
@@ -315,7 +359,7 @@ public final class WorldTourUi {
         }
 
         // Action 1: ALL 230 OFFICIAL COUNTRIES
-        View btnCountries = createActionButton(activity, "🌍 Все страны (230 точек базы Blink, надёжно)", PURPLE, new View.OnClickListener() {
+        View btnCountries = createActionButton(activity, "Все страны (230 точек базы Blink)", PRIMARY, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 WorldTour.start(activity, WorldTour.MODE_COUNTRIES_ONLY, currentDelay, new Runnable() {
@@ -331,7 +375,7 @@ public final class WorldTourUi {
         card.addView(btnCountries);
 
         // Action 2: All 249 countries and cities (1624 targets)
-        View btnAll = createActionButton(activity, "🏙 Все страны и города (1624 точки)", PURPLE, new View.OnClickListener() {
+        View btnAll = createActionButton(activity, "Все страны и города (1624 точки)", PRIMARY, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 WorldTour.start(activity, WorldTour.MODE_ALL_CITIES, currentDelay, new Runnable() {
@@ -347,7 +391,7 @@ public final class WorldTourUi {
         card.addView(btnAll);
 
         // Action 3: Globe Grid (180 coords covering land & ocean)
-        View btnGrid = createActionButton(activity, "🌊 Облететь планету (сетка + океаны)", PURPLE, new View.OnClickListener() {
+        View btnGrid = createActionButton(activity, "Облететь всю планету", PRIMARY, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 WorldTour.start(activity, WorldTour.MODE_GLOBE_GRID, currentDelay, new Runnable() {
@@ -363,7 +407,7 @@ public final class WorldTourUi {
         card.addView(btnGrid);
 
         // Action 4: Stop
-        View btnStop = createActionButton(activity, "⏹ Остановить турне", Color.rgb(255, 80, 80), new View.OnClickListener() {
+        View btnStop = createActionButton(activity, "Остановить турне", 0xFFF87171, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 WorldTour.stop();
@@ -433,7 +477,7 @@ public final class WorldTourUi {
 
         // Quick button inside dialog to start tour
         if (!missing.isEmpty()) {
-            View startAllBtn = createActionButton(activity, "🚀 Запустить тур по недостающим (" + missing.size() + ")", GOLD, new View.OnClickListener() {
+            View startAllBtn = createActionButton(activity, "Запустить тур по недостающим (" + missing.size() + ")", GOLD, new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     dialog.dismiss();
@@ -445,7 +489,7 @@ public final class WorldTourUi {
             root.addView(startAllBtn);
         } else {
             TextView congrats = new TextView(activity);
-            congrats.setText("🎉 Все страны мира уже посещены!");
+            congrats.setText("Все страны мира уже посещены");
             congrats.setTextColor(GOLD);
             congrats.setTextSize(14);
             congrats.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -535,10 +579,19 @@ public final class WorldTourUi {
         TextView tv = new TextView(a);
         tv.setText(text);
         tv.setTextSize(11);
+        tv.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         tv.setGravity(Gravity.CENTER);
-        int padH = dp(a, 8);
-        int padV = dp(a, 6);
+        tv.setSingleLine(true);
+        tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        int padH = dp(a, 10);
+        int padV = dp(a, 7);
         tv.setPadding(padH, padV, padH, padV);
+        GradientDrawable gd = new GradientDrawable();
+        gd.setColor(0xFF22242D);
+        gd.setCornerRadius(dp(a, 14));
+        gd.setStroke(dp(a, 1), OUTLINE);
+        tv.setBackground(gd);
+        tv.setTextColor(PRIMARY);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
         lp.rightMargin = dp(a, 4);
         tv.setLayoutParams(lp);
@@ -547,12 +600,14 @@ public final class WorldTourUi {
 
     private static void setPillSelected(TextView tv, boolean selected) {
         GradientDrawable gd = new GradientDrawable();
-        gd.setCornerRadius(dp(tv.getContext(), 8));
+        gd.setCornerRadius(dp(tv.getContext(), 14));
         if (selected) {
-            gd.setColor(PURPLE);
-            tv.setTextColor(Color.WHITE);
+            gd.setColor(0xFF2B2E38);
+            gd.setStroke(dp(tv.getContext(), 1), PRIMARY);
+            tv.setTextColor(PRIMARY);
         } else {
-            gd.setColor(DIVIDER);
+            gd.setColor(0xFF22242D);
+            gd.setStroke(dp(tv.getContext(), 1), OUTLINE);
             tv.setTextColor(SECONDARY);
         }
         tv.setBackground(gd);
@@ -562,16 +617,18 @@ public final class WorldTourUi {
         LinearLayout row = new LinearLayout(a);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        int pad = dp(a, 10);
-        row.setPadding(pad, pad, pad, pad);
+        int padH = dp(a, 14);
+        int padV = dp(a, 12);
+        row.setPadding(padH, padV, padH, padV);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(a, 6);
+        lp.topMargin = dp(a, 8);
         row.setLayoutParams(lp);
 
         GradientDrawable gd = new GradientDrawable();
-        gd.setColor(Color.rgb(40, 40, 52));
-        gd.setCornerRadius(dp(a, 10));
+        gd.setColor(0xFF22242D);
+        gd.setCornerRadius(dp(a, 12));
+        gd.setStroke(dp(a, 1), OUTLINE_VARIANT);
         row.setBackground(gd);
 
         TextView tv = new TextView(a);

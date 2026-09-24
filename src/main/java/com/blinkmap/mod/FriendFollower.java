@@ -78,7 +78,7 @@ public final class FriendFollower {
         public String getSecondaryText() {
             StringBuilder sb = new StringBuilder();
             if (isOnline) {
-                sb.append("● В сети");
+                sb.append("В сети");
             } else {
                 sb.append(formatTimeAge(lastUpdateTs));
             }
@@ -91,7 +91,7 @@ public final class FriendFollower {
                 }
             }
             if (speedKmh > 3.0f) {
-                sb.append(" · 🚗 ").append(Math.round(speedKmh)).append(" км/ч");
+                sb.append(" · ").append(Math.round(speedKmh)).append(" км/ч");
             }
             return sb.toString();
         }

@@ -15,8 +15,8 @@ public final class ModConfig {
      */
     public static final boolean IS_DEV_BUILD = true;
 
-    public static final String VERSION_PUBLIC = "1.2.0";
-    public static final String VERSION_DEV = "2.0.0-dev (Top-1 Pro)";
+    public static final String VERSION_PUBLIC = "2.0";
+    public static final String VERSION_DEV = "2.0 Pro";
 
     public static final String PREFS_NAME = "blink_mod_prefs";
     public static final String PREF_DEV_UNLOCKED = "dev_mode_unlocked";
@@ -27,15 +27,11 @@ public final class ModConfig {
      * Determines whether developer tools and aggressive boost features are accessible.
      */
     public static boolean isDevMode(Context context) {
-        if (IS_DEV_BUILD) {
-            return true;
-        }
-        if (context == null) {
-            return false;
-        }
+        if (IS_DEV_BUILD) return true;
+        if (context == null) return false;
         try {
-            SharedPreferences sp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-            return sp.getBoolean(PREF_DEV_UNLOCKED, false);
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .getBoolean(PREF_DEV_UNLOCKED, false);
         } catch (Throwable ignored) {
             return false;
         }

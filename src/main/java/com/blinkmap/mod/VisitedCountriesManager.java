@@ -900,6 +900,105 @@ public final class VisitedCountriesManager {
         return false;
     }
 
+    public static void writeStringToFile(File f, String content) {
+        try {
+            File parent = f.getParentFile();
+            if (parent != null) parent.mkdirs();
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+            fos.write(content.getBytes("UTF-8"));
+            fos.close();
+        } catch (Throwable ignored) {}
+    }
+
+    public static void copyFile(File src, File dst) {
+        try {
+            File parent = dst.getParentFile();
+            if (parent != null) parent.mkdirs();
+            FileInputStream in = new FileInputStream(src);
+            java.io.FileOutputStream out = new java.io.FileOutputStream(dst);
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = in.read(buf)) > 0) {
+                out.write(buf, 0, len);
+            }
+            in.close();
+            out.close();
+        } catch (Throwable ignored) {}
+    }
+
+    public static String dumpMapData(Context context) {
+        if (context == null) context = StepHooks.getApp();
+        if (context == null) return "Ошибка: нет Context";
+
+        File outDir = new File("/sdcard/Download/blink_dump");
+        outDir.mkdirs();
+
+        int copied = 0;
+        try {
+            File cacheDir = new File(context.getCacheDir(), "dir_world_footprints");
+            if (cacheDir.exists() && cacheDir.isDirectory()) {
+                File[] subs = cacheDir.listFiles();
+                if (subs != null) {
+                    for (File f : subs) {
+                        File target = f.isDirectory() ? new File(f, "world") : (f.getName().equals("world") ? f : null);
+                        if (target != null && target.exists() && target.isFile() && target.length() > 0) {
+                            copyFile(target, new File(outDir, "cached_world_" + f.getName() + ".geojson"));
+                            copied++;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Dump cache error", e);
+        }
+
+        String token = getAuthToken(context);
+        int apiDumps = 0;
+        if (token != null && !token.isEmpty()) {
+            if (dumpEndpoint(token, "https://pin.apiblink.ru/api/footprints/countries", new File(outDir, "api_footprints_countries.geojson"))) apiDumps++;
+            if (dumpEndpoint(token, "https://pin.apiblink.ru/api/footprints/stats/world", new File(outDir, "api_footprints_stats_world.json"))) apiDumps++;
+            if (dumpEndpoint(token, "https://pin.apiblink.ru/api/footprints/stats/top/world", new File(outDir, "api_footprints_stats_top_world.json"))) apiDumps++;
+        }
+
+        SharedPreferences p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String visitedJson = p.getString("visited_countries_json", "");
+        if (visitedJson != null && !visitedJson.isEmpty()) {
+            writeStringToFile(new File(outDir, "visited_countries_parsed.json"), visitedJson);
+        }
+
+        return "Сдамплено в /sdcard/Download/blink_dump (кэш: " + copied + ", API: " + apiDumps + ")";
+    }
+
+    private static boolean dumpEndpoint(String token, String urlStr, File outFile) {
+        HttpURLConnection conn = null;
+        try {
+            URL u = new URL(urlStr);
+            conn = (HttpURLConnection) u.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(12000);
+            conn.setRequestProperty("Authorization", token);
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "Blink/1.32.0 (Android)");
+            if (conn.getResponseCode() >= 200 && conn.getResponseCode() < 300) {
+                InputStream is = conn.getInputStream();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line).append('\n');
+                }
+                reader.close();
+                writeStringToFile(outFile, sb.toString());
+                return true;
+            }
+        } catch (Throwable ignored) {
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+        return false;
+    }
+
     private static String readFileToString(File f) {
         try {
             FileInputStream fis = new FileInputStream(f);

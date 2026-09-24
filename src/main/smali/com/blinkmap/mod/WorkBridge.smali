@@ -190,6 +190,59 @@
     return-void
 .end method
 
+.method public static postSteps(Landroid/content/Context;IJLjava/lang/String;)V
+    .locals 8
+
+    :try_start_steps
+    invoke-virtual {p0}, Landroid/content/Context;->getApplicationContext()Landroid/content/Context;
+    move-result-object v0
+    check-cast v0, Lcom/blinkmap/App;
+
+    invoke-virtual {v0}, Lcom/blinkmap/App;->b()Ljava/lang/Object;
+    move-result-object v0
+    check-cast v0, Lae6;
+    invoke-virtual {v0}, Lae6;->Q()Lbyl;
+    move-result-object v0
+    invoke-static {v0}, Lwq0;->C(Lbyl;)Lg2o;
+    move-result-object v0
+
+    new-instance v1, Ljava/util/ArrayList;
+    invoke-direct {v1}, Ljava/util/ArrayList;-><init>()V
+
+    new-instance v3, Lf4o;
+    move v4, p1
+    move-wide v5, p2
+    move-object v7, p4
+    invoke-direct/range {v3 .. v7}, Lf4o;-><init>(IJLjava/lang/String;)V
+    invoke-virtual {v1, v3}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    new-instance v2, Lc4o;
+    const-string v3, "sensor"
+    invoke-direct {v2, v1, v3}, Lc4o;-><init>(Ljava/util/ArrayList;Ljava/lang/String;)V
+
+    new-instance v1, Lcom/blinkmap/mod/ApiContinuation;
+    invoke-direct {v1, v0}, Lcom/blinkmap/mod/ApiContinuation;-><init>(Lg2o;)V
+    invoke-interface {v0, v2, v1}, Lg2o;->a(Lc4o;Lio5;)Ljava/lang/Object;
+    move-result-object v0
+
+    sget-object v1, Lwu5;->COROUTINE_SUSPENDED:Lwu5;
+    if-eq v0, v1, :done_steps
+    invoke-static {v0}, Lcom/blinkmap/mod/StepHooks;->onApiResult(Ljava/lang/Object;)V
+    invoke-static {p0}, Lcom/blinkmap/mod/WorkBridge;->service(Landroid/content/Context;)Lg2o;
+    move-result-object v0
+    invoke-static {v0}, Lcom/blinkmap/mod/WorkBridge;->verifyDay(Lg2o;)V
+    :try_end_steps
+    .catch Ljava/lang/Throwable; {:try_start_steps .. :try_end_steps} :catch_steps
+
+    :done_steps
+    return-void
+
+    :catch_steps
+    move-exception v0
+    invoke-static {v0}, Lcom/blinkmap/mod/StepHooks;->onApiError(Ljava/lang/Throwable;)V
+    return-void
+.end method
+
 .method public static post100k(Landroid/content/Context;JLjava/lang/String;)V
     .locals 8
 

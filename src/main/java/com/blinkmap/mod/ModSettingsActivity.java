@@ -741,11 +741,6 @@ public final class ModSettingsActivity extends Activity {
 
         stepsCard.addView(multiplierSelector("Множитель отправки", "network_steps_multiplier", new int[]{1, 2, 5, 10}));
         container.addView(stepsCard, bottomMargin(14));
-
-        // NOTE: World Tour is STRICTLY GATED ONLY FOR DEV BUILDS (NEVER IN PUBLIC)
-        if (ModConfig.IS_DEV_BUILD) {
-            WorldTourUi.attach(container, this);
-        }
     }
 
     // =========================================================================
@@ -2098,7 +2093,7 @@ public final class ModSettingsActivity extends Activity {
         LinearLayout titleBox = new LinearLayout(this);
         titleBox.setOrientation(LinearLayout.VERTICAL);
         TextView title = new TextView(this);
-        title.setText("🎯 Выберите цель");
+        title.setText("Выберите цель");
         title.setTextSize(20);
         title.setTextColor(COLOR_ON_SURFACE);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -2150,11 +2145,6 @@ public final class ModSettingsActivity extends Activity {
         searchBg.setStroke(dp(1), COLOR_OUTLINE);
         searchContainer.setBackground(searchBg);
 
-        TextView searchIcon = new TextView(this);
-        searchIcon.setText("🔍");
-        searchIcon.setTextSize(14);
-        searchContainer.addView(searchIcon);
-
         final EditText searchEdit = new EditText(this);
         searchEdit.setHint("Поиск по имени или @нику...");
         searchEdit.setHintTextColor(COLOR_ON_SURFACE_VARIANT);
@@ -2162,11 +2152,11 @@ public final class ModSettingsActivity extends Activity {
         searchEdit.setTextSize(14);
         searchEdit.setSingleLine(true);
         searchEdit.setBackground(null);
-        searchEdit.setPadding(dp(10), dp(10), dp(10), dp(10));
+        searchEdit.setPadding(dp(4), dp(10), dp(4), dp(10));
         searchContainer.addView(searchEdit, new LinearLayout.LayoutParams(0, -2, 1f));
 
         final TextView clearBtn = new TextView(this);
-        clearBtn.setText("✕");
+        clearBtn.setText("×");
         clearBtn.setTextSize(14);
         clearBtn.setTextColor(COLOR_ON_SURFACE_VARIANT);
         clearBtn.setPadding(dp(6), dp(6), dp(6), dp(6));
@@ -2179,7 +2169,7 @@ public final class ModSettingsActivity extends Activity {
         searchLp.bottomMargin = dp(10);
         sheet.addView(searchContainer, searchLp);
 
-        // 4. Category Filter Chips: [Все] [● В сети] [Рядом < 5км]
+        // 4. Category Filter Chips: [Все] [В сети] [Рядом < 5км]
         LinearLayout chipsRow = new LinearLayout(this);
         chipsRow.setOrientation(LinearLayout.HORIZONTAL);
         chipsRow.setPadding(dp(16), 0, dp(16), dp(10));
@@ -2190,7 +2180,7 @@ public final class ModSettingsActivity extends Activity {
         final int[] activeFilter = {FILTER_ALL};
 
         final TextView chipAll = createPill("Все (" + allFriends.size() + ")", true);
-        final TextView chipOnline = createPill("● В сети (" + countOnline + ")", false);
+        final TextView chipOnline = createPill("В сети (" + countOnline + ")", false);
         final TextView chipNearby = createPill("Рядом < 5 км", false);
 
         ((LinearLayout.LayoutParams) chipOnline.getLayoutParams()).leftMargin = dp(6);
@@ -2288,12 +2278,6 @@ public final class ModSettingsActivity extends Activity {
                     emptyView.setOrientation(LinearLayout.VERTICAL);
                     emptyView.setGravity(Gravity.CENTER);
                     emptyView.setPadding(0, dp(48), 0, dp(48));
-
-                    TextView emptyIcon = new TextView(ModSettingsActivity.this);
-                    emptyIcon.setText("🔍");
-                    emptyIcon.setTextSize(36);
-                    emptyIcon.setGravity(Gravity.CENTER);
-                    emptyView.addView(emptyIcon);
 
                     TextView emptyText = new TextView(ModSettingsActivity.this);
                     emptyText.setText("Никого не найдено");
@@ -2432,7 +2416,7 @@ public final class ModSettingsActivity extends Activity {
                             FriendFollower.startFollow(ModSettingsActivity.this, friend, mode, radius, speed,
                                     createFollowerListener(badgeText, detailsText, updateGeoHeader));
 
-                            Toast.makeText(ModSettingsActivity.this, "🎯 Преследуем " + friend.getDisplayName(), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(ModSettingsActivity.this, "Преследуем " + friend.getDisplayName(), Toast.LENGTH_SHORT).show();
                             if (onChosen != null) onChosen.run();
                         }
                     });
