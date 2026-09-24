@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -40,10 +41,14 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.graphics.drawable.ColorDrawable;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.widget.EditText;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -2043,145 +2048,470 @@ public final class ModSettingsActivity extends Activity {
     }
 
     private void showFriendChooserDialog(final Runnable onChosen, final Runnable updateGeoHeader, final TextView badgeText, final TextView detailsText) {
-        final List<FriendFollower.FriendTarget> friends = FriendFollower.loadFriends(this);
-        if (friends.isEmpty()) {
+        final List<FriendFollower.FriendTarget> allFriends = FriendFollower.loadFriends(this);
+        if (allFriends.isEmpty()) {
             Toast.makeText(this, "Друзья с координатами не найдены в базе. Откройте карту Blink!", Toast.LENGTH_LONG).show();
             return;
         }
 
-        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(18), dp(20), dp(18));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
-        bg.setCornerRadius(dp(24));
-        bg.setStroke(dp(1), COLOR_OUTLINE);
-        root.setBackground(bg);
+        final Dialog dialog = new Dialog(this, android.R.style.Theme_Translucent_NoTitleBar);
+        final FrameLayout rootFrame = new FrameLayout(this);
+        rootFrame.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
 
+        final View scrim = new View(this);
+        scrim.setBackgroundColor(COLOR_SCRIM);
+        rootFrame.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
+
+        final LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setClickable(true);
+
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(COLOR_SURFACE_CONTAINER_LOW);
+        sheetBg.setCornerRadii(new float[]{dp(28), dp(28), dp(28), dp(28), 0, 0, 0, 0});
+        sheetBg.setStroke(dp(1), COLOR_OUTLINE);
+        sheet.setBackground(sheetBg);
+
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        final int maxHeight = (int) (dm.heightPixels * 0.85f);
+        FrameLayout.LayoutParams sheetLp = new FrameLayout.LayoutParams(-1, maxHeight);
+        sheetLp.gravity = Gravity.BOTTOM;
+        rootFrame.addView(sheet, sheetLp);
+
+        // 1. Top Drag Handle
+        FrameLayout handleArea = new FrameLayout(this);
+        handleArea.setPadding(0, dp(12), 0, dp(8));
+        View handle = new View(this);
+        GradientDrawable handleBg = new GradientDrawable();
+        handleBg.setColor(COLOR_DRAG_HANDLE);
+        handleBg.setCornerRadius(dp(2));
+        handle.setBackground(handleBg);
+        FrameLayout.LayoutParams hLp = new FrameLayout.LayoutParams(dp(36), dp(4));
+        hLp.gravity = Gravity.CENTER;
+        handleArea.addView(handle, hLp);
+        sheet.addView(handleArea, new LinearLayout.LayoutParams(-1, -2));
+
+        // 2. Header Bar
+        FrameLayout headerBar = new FrameLayout(this);
+        headerBar.setPadding(dp(20), dp(4), dp(20), dp(10));
+
+        LinearLayout titleBox = new LinearLayout(this);
+        titleBox.setOrientation(LinearLayout.VERTICAL);
         TextView title = new TextView(this);
-        title.setText("Выберите друга");
-        title.setTextSize(18);
+        title.setText("🎯 Выберите цель");
+        title.setTextSize(20);
         title.setTextColor(COLOR_ON_SURFACE);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        root.addView(title);
+        titleBox.addView(title);
 
-        TextView subtitle = new TextView(this);
-        subtitle.setText("Доступно друзей на карте: " + friends.size());
-        subtitle.setTextSize(13);
-        subtitle.setTextColor(COLOR_ON_SURFACE_VARIANT);
-        subtitle.setPadding(0, dp(4), 0, dp(14));
-        root.addView(subtitle);
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-
-        builder.setView(root);
-        final AlertDialog dialog = builder.create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        int countOnline = 0;
+        for (FriendFollower.FriendTarget f : allFriends) {
+            if (f.isOnline) countOnline++;
         }
+
+        final TextView subtitle = new TextView(this);
+        subtitle.setText("Доступно: " + allFriends.size() + (countOnline > 0 ? (" · " + countOnline + " в сети") : ""));
+        subtitle.setTextSize(12);
+        subtitle.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        subtitle.setPadding(0, dp(2), 0, 0);
+        titleBox.addView(subtitle);
+
+        FrameLayout.LayoutParams titleLp = new FrameLayout.LayoutParams(-2, -2);
+        titleLp.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
+        headerBar.addView(titleBox, titleLp);
+
+        // Close Button
+        TextView closeBtn = new TextView(this);
+        closeBtn.setText("×");
+        closeBtn.setTextSize(20);
+        closeBtn.setTextColor(COLOR_ON_SURFACE);
+        closeBtn.setGravity(Gravity.CENTER);
+        closeBtn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        GradientDrawable closeBg = new GradientDrawable();
+        closeBg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        closeBg.setShape(GradientDrawable.OVAL);
+        closeBtn.setBackground(closeBg);
+        addTouchSpring(closeBtn);
+        FrameLayout.LayoutParams closeLp = new FrameLayout.LayoutParams(dp(32), dp(32));
+        closeLp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        headerBar.addView(closeBtn, closeLp);
+
+        sheet.addView(headerBar, new LinearLayout.LayoutParams(-1, -2));
+
+        // 3. Search Bar
+        LinearLayout searchContainer = new LinearLayout(this);
+        searchContainer.setOrientation(LinearLayout.HORIZONTAL);
+        searchContainer.setGravity(Gravity.CENTER_VERTICAL);
+        searchContainer.setPadding(dp(14), 0, dp(14), 0);
+
+        GradientDrawable searchBg = new GradientDrawable();
+        searchBg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        searchBg.setCornerRadius(dp(16));
+        searchBg.setStroke(dp(1), COLOR_OUTLINE);
+        searchContainer.setBackground(searchBg);
+
+        TextView searchIcon = new TextView(this);
+        searchIcon.setText("🔍");
+        searchIcon.setTextSize(14);
+        searchContainer.addView(searchIcon);
+
+        final EditText searchEdit = new EditText(this);
+        searchEdit.setHint("Поиск по имени или @нику...");
+        searchEdit.setHintTextColor(COLOR_ON_SURFACE_VARIANT);
+        searchEdit.setTextColor(COLOR_ON_SURFACE);
+        searchEdit.setTextSize(14);
+        searchEdit.setSingleLine(true);
+        searchEdit.setBackground(null);
+        searchEdit.setPadding(dp(10), dp(10), dp(10), dp(10));
+        searchContainer.addView(searchEdit, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        final TextView clearBtn = new TextView(this);
+        clearBtn.setText("✕");
+        clearBtn.setTextSize(14);
+        clearBtn.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        clearBtn.setPadding(dp(6), dp(6), dp(6), dp(6));
+        clearBtn.setVisibility(View.GONE);
+        searchContainer.addView(clearBtn);
+
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(-1, dp(44));
+        searchLp.leftMargin = dp(16);
+        searchLp.rightMargin = dp(16);
+        searchLp.bottomMargin = dp(10);
+        sheet.addView(searchContainer, searchLp);
+
+        // 4. Category Filter Chips: [Все] [● В сети] [Рядом < 5км]
+        LinearLayout chipsRow = new LinearLayout(this);
+        chipsRow.setOrientation(LinearLayout.HORIZONTAL);
+        chipsRow.setPadding(dp(16), 0, dp(16), dp(10));
+
+        final int FILTER_ALL = 0;
+        final int FILTER_ONLINE = 1;
+        final int FILTER_NEARBY = 2;
+        final int[] activeFilter = {FILTER_ALL};
+
+        final TextView chipAll = createPill("Все (" + allFriends.size() + ")", true);
+        final TextView chipOnline = createPill("● В сети (" + countOnline + ")", false);
+        final TextView chipNearby = createPill("Рядом < 5 км", false);
+
+        ((LinearLayout.LayoutParams) chipOnline.getLayoutParams()).leftMargin = dp(6);
+        ((LinearLayout.LayoutParams) chipNearby.getLayoutParams()).leftMargin = dp(6);
+
+        chipsRow.addView(chipAll);
+        chipsRow.addView(chipOnline);
+        chipsRow.addView(chipNearby);
+        sheet.addView(chipsRow, new LinearLayout.LayoutParams(-1, -2));
+
+        // 5. ScrollView with Friends List
+        final ScrollView listScroll = new ScrollView(this);
+        listScroll.setClipToPadding(false);
+        listScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+
+        final LinearLayout listContainer = new LinearLayout(this);
+        listContainer.setOrientation(LinearLayout.VERTICAL);
+        listContainer.setPadding(dp(16), dp(4), dp(16), dp(24));
+        listScroll.addView(listContainer, new ScrollView.LayoutParams(-1, -2));
+
+        sheet.addView(listScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
         final SharedPreferences sp = getSharedPreferences(PREFS, 0);
 
-        for (final FriendFollower.FriendTarget friend : friends) {
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(dp(12), dp(10), dp(12), dp(10));
-            GradientDrawable rowBg = new GradientDrawable();
-            rowBg.setColor(COLOR_SURFACE_CONTAINER);
-            rowBg.setCornerRadius(dp(16));
-            rowBg.setStroke(dp(1), COLOR_OUTLINE_VARIANT);
-            row.setBackground(rowBg);
+        final Runnable closeSheet = new Runnable() {
+            @Override
+            public void run() {
+                scrim.animate().alpha(0f).setDuration(200).start();
+                sheet.animate().translationY(maxHeight).setDuration(220)
+                        .setInterpolator(INTERPOLATOR_ACCELERATE)
+                        .withEndAction(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    dialog.dismiss();
+                                } catch (Throwable ignored) {}
+                            }
+                        }).start();
+            }
+        };
 
-            // Avatar placeholder with letter
-            FrameLayout avatar = new FrameLayout(this);
-            GradientDrawable avBg = new GradientDrawable();
-            avBg.setColor(friend.isOnline ? 0xFF1B3D2F : COLOR_PRIMARY_CONTAINER);
-            avBg.setCornerRadius(dp(18));
-            avBg.setStroke(dp(1), friend.isOnline ? COLOR_SUCCESS : COLOR_OUTLINE);
-            avatar.setBackground(avBg);
+        scrim.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                closeSheet.run();
+            }
+        });
 
-            TextView avLetter = new TextView(this);
-            String initial = friend.getDisplayName().replaceAll("^@", "");
-            avLetter.setText(initial.isEmpty() ? "?" : initial.substring(0, 1).toUpperCase(Locale.US));
-            avLetter.setTextSize(14);
-            avLetter.setTextColor(friend.isOnline ? COLOR_SUCCESS : COLOR_ON_PRIMARY_CONTAINER);
-            avLetter.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            FrameLayout.LayoutParams lpLetter = new FrameLayout.LayoutParams(-2, -2);
-            lpLetter.gravity = Gravity.CENTER;
-            avatar.addView(avLetter, lpLetter);
-
-            row.addView(avatar, new LinearLayout.LayoutParams(dp(36), dp(36)));
-
-            // Text Info Box
-            LinearLayout textBox = new LinearLayout(this);
-            textBox.setOrientation(LinearLayout.VERTICAL);
-            textBox.setPadding(dp(12), 0, dp(8), 0);
-
-            TextView name = new TextView(this);
-            name.setText(friend.getDisplayName());
-            name.setTextSize(15);
-            name.setTextColor(COLOR_ON_SURFACE);
-            name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            textBox.addView(name);
-
-            TextView secondary = new TextView(this);
-            secondary.setText(friend.getSecondaryText());
-            secondary.setTextSize(12);
-            secondary.setTextColor(friend.isOnline ? COLOR_SUCCESS : COLOR_ON_SURFACE_VARIANT);
-            textBox.addView(secondary);
-
-            row.addView(textBox, new LinearLayout.LayoutParams(0, -2, 1f));
-
-            // Select arrow
-            TextView arrow = new TextView(this);
-            arrow.setText("›");
-            arrow.setTextSize(18);
-            arrow.setTextColor(COLOR_ON_SURFACE_VARIANT);
-            row.addView(arrow);
-
-            addTouchSpring(row);
-            row.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    haptic(v);
-                    dialog.dismiss();
-                    int mode = sp.getInt("follower_mode", FriendFollower.MODE_ORBIT);
-                    float radius = sp.getFloat("follower_radius", FriendFollower.RADIUS_MEDIUM);
-                    float speed = sp.getFloat("follower_speed", FriendFollower.SPEED_WALK);
-
-                    FriendFollower.startFollow(ModSettingsActivity.this, friend, mode, radius, speed,
-                            createFollowerListener(badgeText, detailsText, updateGeoHeader));
-
-                    Toast.makeText(ModSettingsActivity.this, "🎯 Преследуем " + friend.getDisplayName(), Toast.LENGTH_SHORT).show();
-                    if (onChosen != null) onChosen.run();
-                }
-            });
-
-            LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(-1, -2);
-            rLp.bottomMargin = dp(8);
-            list.addView(row, rLp);
-        }
-
-        scroll.addView(list);
-        int maxListHeight = dp(360);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, Math.min(friends.size() * dp(64), maxListHeight)));
-
-        TextView cancelBtn = buttonOutlined("Закрыть");
-        cancelBtn.setOnClickListener(new View.OnClickListener() {
+        closeBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 haptic(v);
-                dialog.dismiss();
+                closeSheet.run();
             }
         });
-        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(-1, dp(42));
-        cLp.topMargin = dp(12);
-        root.addView(cancelBtn, cLp);
+
+        clearBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                searchEdit.setText("");
+            }
+        });
+
+        // Filter & List render logic
+        final Runnable renderList = new Runnable() {
+            @Override
+            public void run() {
+                listContainer.removeAllViews();
+                String query = searchEdit.getText().toString().trim().toLowerCase(Locale.US);
+                int filter = activeFilter[0];
+
+                long currentTargetId = -1;
+                if (FriendFollower.isRunning() && FriendFollower.getCurrentTarget() != null) {
+                    currentTargetId = FriendFollower.getCurrentTarget().id;
+                }
+
+                ArrayList<FriendFollower.FriendTarget> filtered = new ArrayList<FriendFollower.FriendTarget>();
+                for (FriendFollower.FriendTarget f : allFriends) {
+                    if (filter == FILTER_ONLINE && !f.isOnline) continue;
+                    if (filter == FILTER_NEARBY && (f.distanceMeters < 0 || f.distanceMeters > 5000f)) continue;
+
+                    if (!query.isEmpty()) {
+                        String name = f.name.toLowerCase(Locale.US);
+                        String nick = f.nickname.toLowerCase(Locale.US);
+                        String disp = f.getDisplayName().toLowerCase(Locale.US);
+                        if (!name.contains(query) && !nick.contains(query) && !disp.contains(query)) {
+                            continue;
+                        }
+                    }
+                    filtered.add(f);
+                }
+
+                if (filtered.isEmpty()) {
+                    LinearLayout emptyView = new LinearLayout(ModSettingsActivity.this);
+                    emptyView.setOrientation(LinearLayout.VERTICAL);
+                    emptyView.setGravity(Gravity.CENTER);
+                    emptyView.setPadding(0, dp(48), 0, dp(48));
+
+                    TextView emptyIcon = new TextView(ModSettingsActivity.this);
+                    emptyIcon.setText("🔍");
+                    emptyIcon.setTextSize(36);
+                    emptyIcon.setGravity(Gravity.CENTER);
+                    emptyView.addView(emptyIcon);
+
+                    TextView emptyText = new TextView(ModSettingsActivity.this);
+                    emptyText.setText("Никого не найдено");
+                    emptyText.setTextSize(16);
+                    emptyText.setTextColor(COLOR_ON_SURFACE);
+                    emptyText.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                    emptyText.setGravity(Gravity.CENTER);
+                    emptyText.setPadding(0, dp(8), 0, dp(4));
+                    emptyView.addView(emptyText);
+
+                    TextView emptySub = new TextView(ModSettingsActivity.this);
+                    emptySub.setText("Попробуйте изменить поисковый запрос или фильтр");
+                    emptySub.setTextSize(12);
+                    emptySub.setTextColor(COLOR_ON_SURFACE_VARIANT);
+                    emptySub.setGravity(Gravity.CENTER);
+                    emptyView.addView(emptySub);
+
+                    listContainer.addView(emptyView);
+                    return;
+                }
+
+                for (final FriendFollower.FriendTarget friend : filtered) {
+                    final boolean isActiveTarget = (friend.id == currentTargetId);
+
+                    LinearLayout card = new LinearLayout(ModSettingsActivity.this);
+                    card.setOrientation(LinearLayout.HORIZONTAL);
+                    card.setGravity(Gravity.CENTER_VERTICAL);
+                    card.setPadding(dp(14), dp(11), dp(14), dp(11));
+
+                    GradientDrawable cardBg = new GradientDrawable();
+                    if (isActiveTarget) {
+                        cardBg.setColor(0xFF14241B); // Subtle emerald tint
+                        cardBg.setStroke(dp(1), COLOR_SUCCESS);
+                    } else {
+                        cardBg.setColor(COLOR_SURFACE_CONTAINER);
+                        cardBg.setStroke(dp(1), COLOR_OUTLINE_VARIANT);
+                    }
+                    cardBg.setCornerRadius(dp(18));
+                    card.setBackground(cardBg);
+
+                    // 1. Avatar Container with online dot
+                    FrameLayout avatarFrame = new FrameLayout(ModSettingsActivity.this);
+                    ImageView avatarImg = new ImageView(ModSettingsActivity.this);
+                    avatarImg.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                    Bitmap fallbackBmp = AvatarLoader.getInitialsAvatar(friend.getDisplayName(), friend.id, dp(46));
+                    avatarImg.setImageBitmap(fallbackBmp);
+                    AvatarLoader.load(friend.avatarUrl, avatarImg, fallbackBmp);
+                    avatarFrame.addView(avatarImg, new FrameLayout.LayoutParams(dp(44), dp(44)));
+
+                    if (friend.isOnline) {
+                        View onlineDot = new View(ModSettingsActivity.this);
+                        GradientDrawable dotBg = new GradientDrawable();
+                        dotBg.setColor(COLOR_SUCCESS);
+                        dotBg.setShape(GradientDrawable.OVAL);
+                        dotBg.setStroke(dp(2), COLOR_SURFACE_CONTAINER_LOW);
+                        onlineDot.setBackground(dotBg);
+
+                        FrameLayout.LayoutParams dotLp = new FrameLayout.LayoutParams(dp(12), dp(12));
+                        dotLp.gravity = Gravity.BOTTOM | Gravity.END;
+                        avatarFrame.addView(onlineDot, dotLp);
+                    }
+
+                    card.addView(avatarFrame, new LinearLayout.LayoutParams(dp(46), dp(46)));
+
+                    // 2. Info Box
+                    LinearLayout info = new LinearLayout(ModSettingsActivity.this);
+                    info.setOrientation(LinearLayout.VERTICAL);
+                    info.setPadding(dp(12), 0, dp(10), 0);
+
+                    // Name line
+                    LinearLayout nameLine = new LinearLayout(ModSettingsActivity.this);
+                    nameLine.setOrientation(LinearLayout.HORIZONTAL);
+                    nameLine.setGravity(Gravity.CENTER_VERTICAL);
+
+                    TextView nameView = new TextView(ModSettingsActivity.this);
+                    nameView.setText(friend.getDisplayName());
+                    nameView.setTextSize(15);
+                    nameView.setTextColor(COLOR_ON_SURFACE);
+                    nameView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                    nameLine.addView(nameView);
+
+                    if (!friend.name.isEmpty() && !friend.nickname.isEmpty()) {
+                        TextView nickView = new TextView(ModSettingsActivity.this);
+                        nickView.setText(" @" + friend.nickname);
+                        nickView.setTextSize(12);
+                        nickView.setTextColor(COLOR_ON_SURFACE_VARIANT);
+                        nameLine.addView(nickView);
+                    }
+                    info.addView(nameLine);
+
+                    // Subtitle line (Status, Distance, Speed)
+                    TextView subView = new TextView(ModSettingsActivity.this);
+                    subView.setText(friend.getSecondaryText());
+                    subView.setTextSize(12);
+                    subView.setTextColor(friend.isOnline ? COLOR_SUCCESS : COLOR_ON_SURFACE_VARIANT);
+                    subView.setPadding(0, dp(3), 0, 0);
+                    info.addView(subView);
+
+                    card.addView(info, new LinearLayout.LayoutParams(0, -2, 1f));
+
+                    // 3. Right Status / Action
+                    if (isActiveTarget) {
+                        TextView activeBadge = new TextView(ModSettingsActivity.this);
+                        activeBadge.setText("В ОРБИТЕ");
+                        activeBadge.setTextSize(10);
+                        activeBadge.setTextColor(COLOR_SUCCESS);
+                        activeBadge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                        activeBadge.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+                        GradientDrawable abBg = new GradientDrawable();
+                        abBg.setColor(0x2234D399);
+                        abBg.setStroke(dp(1), COLOR_SUCCESS);
+                        abBg.setCornerRadius(dp(10));
+                        activeBadge.setBackground(abBg);
+
+                        card.addView(activeBadge, new LinearLayout.LayoutParams(-2, -2));
+                    } else {
+                        TextView selectArrow = new TextView(ModSettingsActivity.this);
+                        selectArrow.setText("›");
+                        selectArrow.setTextSize(20);
+                        selectArrow.setTextColor(COLOR_ON_SURFACE_VARIANT);
+                        selectArrow.setGravity(Gravity.CENTER);
+                        card.addView(selectArrow, new LinearLayout.LayoutParams(dp(24), dp(24)));
+                    }
+
+                    addTouchSpring(card);
+                    card.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            haptic(v);
+                            closeSheet.run();
+                            int mode = sp.getInt("follower_mode", FriendFollower.MODE_ORBIT);
+                            float radius = sp.getFloat("follower_radius", FriendFollower.RADIUS_MEDIUM);
+                            float speed = sp.getFloat("follower_speed", FriendFollower.SPEED_WALK);
+
+                            FriendFollower.startFollow(ModSettingsActivity.this, friend, mode, radius, speed,
+                                    createFollowerListener(badgeText, detailsText, updateGeoHeader));
+
+                            Toast.makeText(ModSettingsActivity.this, "🎯 Преследуем " + friend.getDisplayName(), Toast.LENGTH_SHORT).show();
+                            if (onChosen != null) onChosen.run();
+                        }
+                    });
+
+                    LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
+                    cardLp.bottomMargin = dp(8);
+                    listContainer.addView(card, cardLp);
+                }
+            }
+        };
+
+        // Filter chip clicks
+        chipAll.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                activeFilter[0] = FILTER_ALL;
+                updatePillStyle(chipAll, true);
+                updatePillStyle(chipOnline, false);
+                updatePillStyle(chipNearby, false);
+                renderList.run();
+            }
+        });
+
+        chipOnline.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                activeFilter[0] = FILTER_ONLINE;
+                updatePillStyle(chipAll, false);
+                updatePillStyle(chipOnline, true);
+                updatePillStyle(chipNearby, false);
+                renderList.run();
+            }
+        });
+
+        chipNearby.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                activeFilter[0] = FILTER_NEARBY;
+                updatePillStyle(chipAll, false);
+                updatePillStyle(chipOnline, false);
+                updatePillStyle(chipNearby, true);
+                renderList.run();
+            }
+        });
+
+        // Search text watcher
+        searchEdit.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                clearBtn.setVisibility(s.length() > 0 ? View.VISIBLE : View.GONE);
+                renderList.run();
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
+        // Initial render
+        renderList.run();
+
+        dialog.setContentView(rootFrame);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+
+        // Enter animation
+        scrim.setAlpha(0f);
+        scrim.animate().alpha(1f).setDuration(220).start();
+        sheet.setTranslationY(maxHeight);
+        sheet.animate().translationY(0f).setDuration(280)
+                .setInterpolator(INTERPOLATOR_EMPHASIZED)
+                .start();
 
         dialog.show();
     }
