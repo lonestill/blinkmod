@@ -181,7 +181,7 @@ public final class StepHooks {
     }
 
     public static void updateLocation(double lat, double lon) {
-        if (WorldTour.isRunning() || FriendFollower.isRunning()) {
+        if (FriendFollower.isRunning()) {
             return;
         }
         double baseLat = customLat != 0.0 ? customLat : lat;
@@ -263,6 +263,7 @@ public final class StepHooks {
         double lat = location.getLatitude();
         double lon = location.getLongitude();
         updateLocation(lat, lon);
+        lastRealLocationTime = System.currentTimeMillis();
         location.setLatitude(getDriftLat(lat));
         location.setLongitude(getDriftLon(lon));
         location.setSpeed(getDriftSpeed(location.getSpeed()));
@@ -275,8 +276,7 @@ public final class StepHooks {
     public static boolean isSpoofingActive() {
         if (FriendFollower.isRunning()) return true;
         if (driftMode != 0) return true;
-        if (customLat != 0.0) return true;
-        if (driftCurLat != 0.0) return true;
+        if (customLat != 0.0 || customLon != 0.0) return true;
         return false;
     }
 
@@ -285,9 +285,11 @@ public final class StepHooks {
     }
 
     public static com.blinkmap.geography.core.LatLng hookUserLatLng(com.blinkmap.geography.core.LatLng latLng, boolean enabled) {
-        if (!enabled || !isSpoofingActive() || latLng == null) return latLng;
-        double lat = getDriftLat(0.0);
-        double lon = getDriftLon(0.0);
+        if (latLng == null) return null;
+        if (!enabled || !isSpoofingActive()) return latLng;
+        double lat = getDriftLat(latLng.b);
+        double lon = getDriftLon(latLng.c);
+        if (lat == 0.0 && lon == 0.0) return latLng;
         return new com.blinkmap.geography.core.LatLng(lat, lon);
     }
 
@@ -334,23 +336,17 @@ public final class StepHooks {
                 driftMode = p.getInt("drift_mode", 0);
             }
             FakeLocationPump.start();
+            startLocationFallback(context);
             BadgeManager.init(context);
-            VisitedCountriesManager.init(context);
 
             try {
                 android.content.IntentFilter filter = new android.content.IntentFilter();
-                filter.addAction("com.blinkmap.mod.START_TOUR");
-                filter.addAction("com.blinkmap.mod.STOP_TOUR");
                 filter.addAction("com.blinkmap.mod.SET_LOCATION");
                 android.content.BroadcastReceiver receiver = new android.content.BroadcastReceiver() {
                     @Override
                     public void onReceive(Context c, android.content.Intent intent) {
                         if (intent == null || intent.getAction() == null) return;
-                        if ("com.blinkmap.mod.START_TOUR".equals(intent.getAction())) {
-                            WorldTour.start(app, WorldTour.MODE_TOP1_BOOST, 1500L, null);
-                        } else if ("com.blinkmap.mod.STOP_TOUR".equals(intent.getAction())) {
-                            WorldTour.stop();
-                        } else if ("com.blinkmap.mod.SET_LOCATION".equals(intent.getAction())) {
+                        if ("com.blinkmap.mod.SET_LOCATION".equals(intent.getAction())) {
                             double lat = 0.0;
                             double lon = 0.0;
                             try {
@@ -672,6 +668,88 @@ public final class StepHooks {
         SharedPreferences p = prefs();
         if (p == null || !p.getBoolean("local_steps_enabled", false)) return original;
         return original * clamp(p.getInt("local_steps_multiplier", 2), 1, 10);
+    }
+
+    // --- Ghost & Abuse Suite ---
+    public static volatile boolean ghostVoiceActive = true;
+    public static volatile boolean antiSpoofShieldActive = true;
+
+    public static boolean isGhostVoiceActive() {
+        SharedPreferences p = prefs();
+        return p != null ? p.getBoolean("ghost_voice_active", true) : ghostVoiceActive;
+    }
+
+    public static void setGhostVoiceActive(boolean active) {
+        ghostVoiceActive = active;
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putBoolean("ghost_voice_active", active).apply();
+    }
+
+    public static boolean isAntiSpoofShieldActive() {
+        SharedPreferences p = prefs();
+        return p != null ? p.getBoolean("anti_spoof_shield", true) : antiSpoofShieldActive;
+    }
+
+    public static void setAntiSpoofShieldActive(boolean active) {
+        antiSpoofShieldActive = active;
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putBoolean("anti_spoof_shield", active).apply();
+    }
+
+    public static void toast(final String message) {
+        if (app == null || message == null) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(app, message, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    public static void startLocationFallback(Context context) {
+        if (context == null) return;
+        try {
+            final android.location.LocationManager lm = (android.location.LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+            if (lm == null) return;
+
+            android.location.Location lastGps = null;
+            android.location.Location lastNet = null;
+            try {
+                if (lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
+                    lastGps = lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER);
+                }
+            } catch (Throwable ignored) {}
+            try {
+                if (lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)) {
+                    lastNet = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER);
+                }
+            } catch (Throwable ignored) {}
+
+            android.location.Location best = lastGps != null ? lastGps : lastNet;
+            if (best != null) {
+                hookLocation(best);
+            }
+
+            android.location.LocationListener listener = new android.location.LocationListener() {
+                @Override
+                public void onLocationChanged(android.location.Location location) {
+                    if (location != null) {
+                        hookLocation(location);
+                    }
+                }
+                @Override public void onStatusChanged(String provider, int status, android.os.Bundle extras) {}
+                @Override public void onProviderEnabled(String provider) {}
+                @Override public void onProviderDisabled(String provider) {}
+            };
+
+            android.os.Looper looper = android.os.Looper.getMainLooper();
+            if (lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
+                lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 1000L, 0.0f, listener, looper);
+            }
+            if (lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)) {
+                lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 2000L, 0.0f, listener, looper);
+            }
+        } catch (Throwable ignored) {}
     }
 
     private static int saturating(int value, int multiplier) {

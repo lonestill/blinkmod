@@ -81,9 +81,10 @@ public final class ModSettingsActivity extends Activity {
     private static final int TAB_BOOST = 0;
     private static final int TAB_GHOST = 1;
     private static final int TAB_PROFILE = 2;
-    private static final int TAB_LAB = 3;
+    private static final int TAB_CUSTOM = 3;
 
     private int activeTab = TAB_BOOST;
+    private int customSubTab = 0;
     private FrameLayout rootLayout;
     private View scrimView;
     private LinearLayout sheetContainer;
@@ -401,19 +402,6 @@ public final class ModSettingsActivity extends Activity {
             @Override
             public void onClick(View v) {
                 haptic(v);
-                long now = System.currentTimeMillis();
-                if (now - lastTapTime > 2000) devTaps = 0;
-                lastTapTime = now;
-                devTaps++;
-                if (devTaps >= 5) {
-                    devTaps = 0;
-                    boolean enabled = ModConfig.toggleDevMode(ModSettingsActivity.this);
-                    Toast.makeText(ModSettingsActivity.this,
-                            enabled ? "Режим разработчика активирован" : "Режим разработчика выключен",
-                            Toast.LENGTH_SHORT).show();
-                    rebuildTabs();
-                    renderTab(enabled ? TAB_LAB : TAB_BOOST, true);
-                }
             }
         });
 
@@ -471,23 +459,15 @@ public final class ModSettingsActivity extends Activity {
 
     private void rebuildTabs() {
         tabsRow.removeAllViews();
-        boolean hasDev = ModConfig.isDevMode(this);
-        int count = hasDev ? 4 : 3;
+        String[] tabNames = new String[]{"Буст", "Фантом", "Профиль", "Кастомизация"};
+        int[] tabIds = new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE, TAB_CUSTOM};
+        tabButtons = new TextView[4];
 
-        String[] tabNames = hasDev ?
-                new String[]{"Буст", "Фантом", "Профиль", "Lab"} :
-                new String[]{"Буст", "Фантом", "Профиль"};
-        int[] tabIds = hasDev ?
-                new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE, TAB_LAB} :
-                new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE};
-
-        tabButtons = new TextView[count];
-
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < 4; i++) {
             final int id = tabIds[i];
             TextView tab = new TextView(this);
             tab.setText(tabNames[i]);
-            tab.setTextSize(13);
+            tab.setTextSize(11);
             tab.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             tab.setGravity(Gravity.CENTER);
 
@@ -510,16 +490,11 @@ public final class ModSettingsActivity extends Activity {
 
     private void updateTabStyles() {
         if (tabButtons == null) return;
-        boolean hasDev = ModConfig.isDevMode(this);
-        int[] tabIds = hasDev ?
-                new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE, TAB_LAB} :
-                new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE};
-
+        int[] tabIds = new int[]{TAB_BOOST, TAB_GHOST, TAB_PROFILE, TAB_CUSTOM};
         for (int i = 0; i < tabButtons.length; i++) {
             TextView tab = tabButtons[i];
             boolean selected = (tabIds[i] == activeTab);
             tab.setTextColor(selected ? COLOR_ON_PRIMARY_CONTAINER : COLOR_ON_SURFACE_VARIANT);
-
             GradientDrawable tabBg = new GradientDrawable();
             if (selected) {
                 tabBg.setColor(COLOR_PRIMARY_CONTAINER);
@@ -598,8 +573,8 @@ public final class ModSettingsActivity extends Activity {
             case TAB_PROFILE:
                 renderProfileTab(contentContainer);
                 break;
-            case TAB_LAB:
-                renderLabTab(contentContainer);
+            case TAB_CUSTOM:
+                renderCustomTab(contentContainer);
                 break;
         }
     }
@@ -1006,6 +981,54 @@ public final class ModSettingsActivity extends Activity {
         batteryCard.addView(batLabel);
         batteryCard.addView(batPills);
         container.addView(batteryCard, bottomMargin(14));
+
+        // --- Ghost Suite Card ---
+        LinearLayout ghostCard = card();
+        sectionTitle(ghostCard, "GHOST SUITE (СТЕЛС И МЕССЕНДЖЕР)");
+
+        ghostCard.addView(toggleRow("Инкогнито войсов и кружков",
+                "Не отправлять отчет о прослушивании/просмотре на сервер",
+                "ghost_voice_active", StepHooks.isGhostVoiceActive(), new ToggleSwitchView.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                        StepHooks.setGhostVoiceActive(isChecked);
+                    }
+                }));
+        ghostCard.addView(line());
+
+        ghostCard.addView(toggleRow("Анти-спуф щит (Jammer Shield)",
+                "Блокирует маркер фейк-GPS от отображения у друзей на карте",
+                "anti_spoof_shield", StepHooks.isAntiSpoofShieldActive(), new ToggleSwitchView.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                        StepHooks.setAntiSpoofShieldActive(isChecked);
+                    }
+                }));
+        container.addView(ghostCard, bottomMargin(14));
+
+        // --- Abuse Suite Card ---
+        LinearLayout abuseCard = card();
+        sectionTitle(abuseCard, "ABUSE SUITE");
+        abuseCard.addView(textSmall("Удаленный вызов серверных механик без физических действий."));
+
+        TextView bumpBtn = buttonPrimary("Дистанционный бамп (POST /api/bump)");
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.topMargin = dp(8);
+        bumpBtn.setLayoutParams(bp);
+        bumpBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                try {
+                    Class<?> c = Class.forName("com.blinkmap.mod.WorkBridge");
+                    c.getMethod("triggerBump", Context.class).invoke(null, ModSettingsActivity.this);
+                } catch (Throwable t) {
+                    Toast.makeText(ModSettingsActivity.this, "Ошибка: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        abuseCard.addView(bumpBtn);
+        container.addView(abuseCard, bottomMargin(14));
     }
 
     // =========================================================================
@@ -1085,37 +1108,6 @@ public final class ModSettingsActivity extends Activity {
 
         container.addView(profCard, bottomMargin(14));
 
-        // --- Mod Appearance Settings Card ---
-        LinearLayout uiCard = card();
-        sectionTitle(uiCard, "ИНТЕРФЕЙС И НАВИГАЦИЯ");
-
-        TextView navNote = textSmall("Кнопка мода нативно встроена в нижний бар (карта, друзья, чаты, чекины, ты, мод).");
-        uiCard.addView(navNote);
-
-        uiCard.addView(toggleRow("Плавающая кнопка",
-                "Включить дополнительную плавающую кнопку на экране",
-                "floating_enabled", false, new ToggleSwitchView.OnCheckedChangeListener() {
-                    @Override
-                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
-                        if (MapPicker.mainActivity != null) {
-                            BlinkModButton.inject(MapPicker.mainActivity);
-                        }
-                    }
-                }));
-
-        uiCard.addView(line());
-        uiCard.addView(toggleRow("Плавающая кнопка слева",
-                "Разместить плавающую кнопку у левого края экрана",
-                "floating_left", false, new ToggleSwitchView.OnCheckedChangeListener() {
-                    @Override
-                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
-                        if (MapPicker.mainActivity != null) {
-                            BlinkModButton.inject(MapPicker.mainActivity);
-                        }
-                    }
-                }));
-        container.addView(uiCard, bottomMargin(14));
-
         // --- About Mod Card ---
         LinearLayout aboutCard = card();
         sectionTitle(aboutCard, "О МОДЕ");
@@ -1144,103 +1136,104 @@ public final class ModSettingsActivity extends Activity {
     }
 
     // =========================================================================
-    // 4. LAB (DEV / ADVANCED TAB)
+    // 4. КАСТОМИЗАЦИЯ (CUSTOM TAB)
     // =========================================================================
-    private void renderLabTab(LinearLayout container) {
-        // API Check Card
-        LinearLayout apiCard = card();
-        sectionTitle(apiCard, "ВНУТРЕННИЙ API");
+    private void renderCustomTab(LinearLayout container) {
+        LinearLayout subTabsRow = new LinearLayout(this);
+        subTabsRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(-1, -2);
+        stLp.bottomMargin = dp(14);
+        subTabsRow.setLayoutParams(stLp);
 
-        TextView checkBtn = buttonPrimary("Проверить соединение");
-        checkBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(final View v) {
-                haptic(v);
-                try {
-                    StepHooks.onApiCheckStarted();
-                    Class<?> c = Class.forName("com.blinkmap.mod.WorkBridge");
-                    c.getMethod("verifyNow", Context.class).invoke(null, getApplicationContext());
-                    Toast.makeText(ModSettingsActivity.this, "Проверка API...", Toast.LENGTH_SHORT).show();
-                    v.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (activeTab == TAB_LAB) renderTab(TAB_LAB, false);
-                        }
-                    }, 1500);
-                } catch (Throwable e) {
-                    StepHooks.onApiVerifyError(e);
+        String[] subTabNames = new String[]{"Интерфейс", "Реклама и чаты"};
+        if (customSubTab > 1) customSubTab = 0;
+
+        final TextView[] pills = new TextView[subTabNames.length];
+        for (int i = 0; i < subTabNames.length; i++) {
+            final int subIdx = i;
+            TextView pill = createPill(subTabNames[i], customSubTab == subIdx);
+            pills[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            subTabsRow.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    customSubTab = subIdx;
+                    renderTab(TAB_CUSTOM, false);
                 }
+            });
+        }
+        container.addView(subTabsRow);
+
+        if (customSubTab == 0) {
+            // === ПОДВКЛАДКА: ИНТЕРФЕЙС ===
+            LinearLayout uiCard = card();
+            sectionTitle(uiCard, "ИНТЕРФЕЙС И НАВИГАЦИЯ");
+
+            TextView navNote = textSmall("Кнопка мода нативно встроена в нижний бар. Можно скрыть отдельные вкладки — приложение не сломается.");
+            uiCard.addView(navNote);
+
+            uiCard.addView(line());
+            sectionTitle(uiCard, "ВКЛАДКИ НИЖНЕГО БАРА");
+
+            final String[] tabKeys  = BlinkModButton.TAB_KEYS;
+            final String[] tabNames = BlinkModButton.TAB_NAMES;
+            for (int i = 0; i < tabKeys.length; i++) {
+                String sub = (i == 5) ? "Если скрыть — открывать мод можно через плавающую кнопку" : null;
+                uiCard.addView(toggleRow(tabNames[i], sub, tabKeys[i], true,
+                        new ToggleSwitchView.OnCheckedChangeListener() {
+                            @Override
+                            public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                                BlinkModButton.applyTabVisibility(getApplicationContext());
+                            }
+                        }));
+                if (i < tabKeys.length - 1) uiCard.addView(line());
             }
-        });
-        apiCard.addView(checkBtn);
-        apiCard.addView(statusInfoRow("Состояние API", getSharedPreferences(PREFS, 0).getString("api_steps_state", "Проверок ещё не было")));
-        container.addView(apiCard, bottomMargin(14));
+            container.addView(uiCard, bottomMargin(14));
 
-        // Diagnostics Card
-        LinearLayout diagCard = card();
-        sectionTitle(diagCard, "СИСТЕМНЫЙ ОТЧЁТ");
+            LinearLayout floatCard = card();
+            sectionTitle(floatCard, "ПЛАВАЮЩАЯ КНОПКА");
+            floatCard.addView(toggleRow("Плавающая кнопка",
+                    "Включить дополнительную плавающую кнопку на экране",
+                    "floating_enabled", false, new ToggleSwitchView.OnCheckedChangeListener() {
+                        @Override
+                        public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                            if (MapPicker.mainActivity != null) {
+                                BlinkModButton.inject(MapPicker.mainActivity);
+                            }
+                        }
+                    }));
+            floatCard.addView(line());
+            floatCard.addView(toggleRow("Плавающая кнопка слева",
+                    "Разместить плавающую кнопку у левого края экрана",
+                    "floating_left", false, new ToggleSwitchView.OnCheckedChangeListener() {
+                        @Override
+                        public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                            if (MapPicker.mainActivity != null) {
+                                BlinkModButton.inject(MapPicker.mainActivity);
+                            }
+                        }
+                    }));
+            container.addView(floatCard, bottomMargin(14));
 
-        TextView diagBtn = buttonOutlined("Скопировать диагностику");
-        diagBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                haptic(v);
-                ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                cm.setPrimaryClip(ClipData.newPlainText("BlinkMod Diagnostics", generateDiagnostics()));
-                Toast.makeText(ModSettingsActivity.this, "Отчёт скопирован", Toast.LENGTH_SHORT).show();
-            }
-        });
-        diagCard.addView(diagBtn);
-        container.addView(diagCard, bottomMargin(14));
+        } else if (customSubTab == 1) {
+            // === ПОДВКЛАДКА: РЕКЛАМА И ЧАТЫ ===
+            LinearLayout chatCard = card();
+            sectionTitle(chatCard, "СИСТЕМНЫЕ КАНАЛЫ");
+            chatCard.addView(toggleRow("Канал «BlinkMod News»", "Заменить скучный системный чат на BlinkMod News («скоро тут что то будет»)", "replace_blink_news", true, null));
+            chatCard.addView(line());
+            chatCard.addView(toggleRow("Скрыть новостной канал", "Полностью скрыть системный/новостной канал из списка чатов", "hide_blink_news", false, null));
+            container.addView(chatCard, bottomMargin(14));
 
-        // Local Log Card
-        LinearLayout logCard = card();
-        sectionTitle(logCard, "ЖУРНАЛ СОБЫТИЙ");
-
-        String log = getSharedPreferences(PREFS, 0).getString("lab_log", "");
-        TextView logView = new TextView(this);
-        logView.setText(log.isEmpty() ? "Событий пока нет" : log);
-        logView.setTextSize(11);
-        logView.setTextColor(log.isEmpty() ? COLOR_ON_SURFACE_VARIANT : COLOR_ON_SURFACE);
-        logView.setTypeface(Typeface.MONOSPACE);
-        logView.setPadding(dp(12), dp(10), dp(12), dp(10));
-        GradientDrawable logBg = new GradientDrawable();
-        logBg.setColor(COLOR_SURFACE_CONTAINER_LOW);
-        logBg.setCornerRadius(dp(12));
-        logBg.setStroke(dp(1), COLOR_OUTLINE);
-        logView.setBackground(logBg);
-        logCard.addView(logView);
-
-        TextView clearLogBtn = buttonOutlined("Очистить журнал");
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-1, dp(40));
-        clp.topMargin = dp(8);
-        clearLogBtn.setLayoutParams(clp);
-        clearLogBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                haptic(v);
-                StepHooks.clearLog();
-                renderTab(TAB_LAB, false);
-            }
-        });
-        logCard.addView(clearLogBtn);
-
-        container.addView(logCard, bottomMargin(14));
-    }
-
-    private String generateDiagnostics() {
-        SharedPreferences p = getSharedPreferences(PREFS, 0);
-        String version = "?";
-        try {
-            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (Throwable ignored) {}
-
-        return "BlinkMod " + ModConfig.getVersionDisplay(this) + "\n" +
-                "APK: " + version + " | Android " + Build.VERSION.SDK_INT + "\n" +
-                "Location: spoof=" + StepHooks.isSpoofingActive() + " pause=" + StepHooks.pauseStatus() + " drift=" + StepHooks.driftMode + "\n" +
-                "Battery: hide=" + StepHooks.hideCharge + " forced=" + StepHooks.forcedCharge + "\n" +
-                "Steps: enabled=" + p.getBoolean("network_steps_enabled", false) + " x" + p.getInt("network_steps_multiplier", 2) + "\n" +
-                "Hits: geoBlocked=" + StepHooks.locationBlockHits + " drift=" + StepHooks.driftHits + " charge=" + StepHooks.chargeFilterHits;
+            LinearLayout adCard = card();
+            sectionTitle(adCard, "БЛОКИРОВКА И ПРИВАТНОСТЬ");
+            adCard.addView(toggleRow("Блокировка рекламы", "Скрыть рекламные баннеры Aviasales, шторки и промо-слои на карте", "adblock_enabled", true, null));
+            adCard.addView(line());
+            adCard.addView(toggleRow("Отключить трекеры", "Блокировать сбор аналитики и телеметрии (AppsFlyer, MyTracker)", "block_analytics_enabled", true, null));
+            container.addView(adCard, bottomMargin(14));
+        }
     }
 
     // =========================================================================

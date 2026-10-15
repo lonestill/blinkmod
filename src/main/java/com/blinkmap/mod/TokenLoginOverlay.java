@@ -65,8 +65,43 @@ public final class TokenLoginOverlay {
     }
 
     public static void showButton(final Activity activity) {
-        // Token actions live in BlinkMod settings and must not cover stock auth controls.
-        hideButton(activity);
+        if (activity == null || activity.isFinishing()) return;
+        View decor = activity.getWindow().getDecorView();
+        if (!(decor instanceof ViewGroup)) return;
+
+        ViewGroup root = (ViewGroup) decor;
+        View old = root.findViewWithTag(BUTTON_TAG);
+        if (old != null) root.removeView(old);
+
+        TextView btn = new TextView(activity);
+        btn.setTag(BUTTON_TAG);
+        btn.setText("Вход по токену");
+        btn.setTextSize(12.5f);
+        btn.setTypeface(Typeface.DEFAULT_BOLD);
+        btn.setTextColor(Color.WHITE);
+        btn.setPadding(dp(activity, 14), dp(activity, 8), dp(activity, 14), dp(activity, 8));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.argb(220, 30, 30, 35));
+        bg.setCornerRadius(dp(activity, 20));
+        bg.setStroke(dp(activity, 1), Color.argb(120, 255, 255, 255));
+        btn.setBackground(bg);
+        btn.setElevation(dp(activity, 8));
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        lp.bottomMargin = dp(activity, 36);
+        btn.setLayoutParams(lp);
+
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showTokenDialog(activity);
+            }
+        });
+
+        root.addView(btn);
     }
 
     public static void hideButton(Activity activity) {

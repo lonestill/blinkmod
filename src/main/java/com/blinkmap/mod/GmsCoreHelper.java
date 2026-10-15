@@ -130,12 +130,13 @@ public final class GmsCoreHelper {
         body.setTextColor(Color.rgb(230, 230, 235));
         body.setLineSpacing(dp(activity, 4), 1.0f);
         body.setText(
-                "Оригинальный Google Play блокирует вход в модифицированных приложениях из-за несовпадения цифровой подписи.\n\n" +
-                "Для входа через Google в моде используется официальный опенсорс ReVanced GmsCore (microG).\n\n" +
+                "Оригинальный Google Play блокирует вход в модифицированных приложениях из-за сторонней цифровой подписи.\n\n" +
+                "Для входа через Google используется ReVanced GmsCore (microG).\n\n" +
                 "Порядок действий:\n" +
-                "1. Скачай и установи GmsCore (кнопка ниже).\n" +
-                "2. Открой GmsCore и добавь свой Google-аккаунт.\n" +
-                "3. Нажми кнопку «Войти с Google» в Blink."
+                "1. Установите ReVanced GmsCore (кнопка ниже).\n" +
+                "2. ОБЯЗАТЕЛЬНО откройте GmsCore и добавьте ваш Google-аккаунт внутри него («Настройки Google аккаунта»).\n" +
+                "3. Только после этого нажимайте «Войти с Google» в Blink.\n\n" +
+                "Если вход через Google не срабатывает — используйте «Вход по токену»."
         );
         layout.addView(body);
 
@@ -144,20 +145,18 @@ public final class GmsCoreHelper {
                 .setView(layout)
                 .setNegativeButton("Закрыть", null);
 
+        builder.setNeutralButton("Вход по токену", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                TokenLoginOverlay.showTokenDialog(activity);
+            }
+        });
+
         if (!installed) {
             builder.setPositiveButton("Скачать GmsCore", new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
                     downloadGmsCore(activity);
-                }
-            });
-            builder.setNeutralButton("GitHub", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    try {
-                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(GMS_LATEST_RELEASE_URL));
-                        activity.startActivity(intent);
-                    } catch (Throwable ignored) {}
                 }
             });
         } else {
@@ -206,7 +205,7 @@ public final class GmsCoreHelper {
 
         TextView pill = new TextView(activity);
         pill.setTag(PILL_TAG);
-        pill.setText(installed ? "microG готов" : "Вход через Google (microG)");
+        pill.setText(installed ? "microG готов (инфо/настройки)" : "Вход через Google (microG)");
         pill.setTextSize(12.5f);
         pill.setTypeface(Typeface.DEFAULT_BOLD);
         pill.setTextColor(Color.WHITE);
@@ -240,7 +239,7 @@ public final class GmsCoreHelper {
                 public void run() {
                     hidePill(activity);
                 }
-            }, 3500);
+            }, 6000);
         }
     }
 

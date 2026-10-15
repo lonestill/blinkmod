@@ -1,7 +1,9 @@
 package com.blinkmap.mod;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
@@ -13,8 +15,64 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class BlinkModButton {
+
+    // Label resource IDs for each bottom bar tab (v1.36)
+    public static final int LABEL_MAP     = 0x7f130801;
+    public static final int LABEL_FRIENDS = 0x7f130800;
+    public static final int LABEL_CHATS   = 0x7f1307ff;
+    public static final int LABEL_MARKET  = 0x7f130802;
+    public static final int LABEL_ACCOUNT = 0x7f130803;
+    public static final int LABEL_MOD     = 0x7f1307fe;
+
+    // Tab keys for SharedPreferences
+    public static final String[] TAB_KEYS   = {"tab_show_map", "tab_show_friends", "tab_show_chats", "tab_show_market", "tab_show_account", "tab_show_mod"};
+    public static final String[] TAB_NAMES  = {"Карта", "Друзья", "Чаты", "Маркет", "Аккаунт", "Мод"};
+    public static final int[]    TAB_LABELS = {LABEL_MAP, LABEL_FRIENDS, LABEL_CHATS, LABEL_MARKET, LABEL_ACCOUNT, LABEL_MOD};
+
+    // Tabs hidden by user — label IDs in this set are filtered out of the bottom bar
+    public static final Set<Integer> hiddenTabLabelIds =
+            Collections.newSetFromMap(new ConcurrentHashMap<Integer, Boolean>());
+
+    /** Called from sqb.smali after building the full tab array. Returns filtered array. */
+    public static Object[] buildTabArray(Object[] allTabs) {
+        if (hiddenTabLabelIds.isEmpty()) return allTabs;
+        ArrayList<Object> result = new ArrayList<Object>(allTabs.length);
+        for (Object tab : allTabs) {
+            int label = getTabLabelId(tab);
+            if (!hiddenTabLabelIds.contains(label)) {
+                result.add(tab);
+            }
+        }
+        return result.toArray();
+    }
+
+    /** Sync hidden set from SharedPreferences. Call on app start and after settings change. */
+    public static void applyTabVisibility(Context ctx) {
+        SharedPreferences p = ctx.getSharedPreferences("blinkmod_settings", 0);
+        hiddenTabLabelIds.clear();
+        for (int i = 0; i < TAB_KEYS.length; i++) {
+            // default true = shown; false = hidden
+            if (!p.getBoolean(TAB_KEYS[i], true)) {
+                hiddenTabLabelIds.add(TAB_LABELS[i]);
+            }
+        }
+    }
+
+    private static int getTabLabelId(Object tab) {
+        if (tab == null) return 0;
+        try {
+            java.lang.reflect.Method m = tab.getClass().getMethod("b");
+            Object res = m.invoke(tab);
+            return (res instanceof Integer) ? ((Integer) res).intValue() : 0;
+        } catch (Throwable t) { return 0; }
+    }
+
     private static final String TAG = "blinkmod_floating_button";
     public static volatile Activity currentActivity = null;
 
@@ -24,6 +82,7 @@ public final class BlinkModButton {
         currentActivity = activity;
         MapPicker.mainActivity = activity;
         StepHooks.init(activity.getApplicationContext());
+        applyTabVisibility(activity.getApplicationContext());
 
         View decor = activity.getWindow().getDecorView();
         if (!(decor instanceof ViewGroup)) return;
@@ -31,9 +90,8 @@ public final class BlinkModButton {
         if (old != null) ((ViewGroup) decor).removeView(old);
 
         final android.content.SharedPreferences prefs = activity.getSharedPreferences("blinkmod_settings", Activity.MODE_PRIVATE);
-        // Clean native bottom bar button is now primary.
-        // Floating button (2015 mode) is disabled by default, toggleable in settings.
-        if (!prefs.getBoolean("floating_enabled", false)) {
+        // Floating button enabled by default, toggleable in settings
+        if (!prefs.getBoolean("floating_enabled", true)) {
             return;
         }
 
@@ -90,9 +148,12 @@ public final class BlinkModButton {
         try {
             java.lang.reflect.Method m = tab.getClass().getMethod("b");
             Object res = m.invoke(tab);
-            if (res instanceof Integer && ((Integer) res) == 0x7f130767) {
-                openMenu();
-                return true;
+            if (res instanceof Integer) {
+                int id = ((Integer) res).intValue();
+                if (id == 0x7f1307fe || id == 0x7f130767) {
+                    openMenu();
+                    return true;
+                }
             }
         } catch (Throwable ignored) {}
         return false;

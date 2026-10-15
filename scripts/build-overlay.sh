@@ -24,7 +24,7 @@ fi
 
 ANDROID_JAR="${ANDROID_JAR:-/opt/homebrew/share/android-commandlinetools/platforms/android-35/android.jar}"
 D8="${D8:-/opt/homebrew/share/android-commandlinetools/build-tools/35.0.0/d8}"
-APKTOOL="${APKTOOL:-/Users/a123/Desktop/AI_Agent/blink_from_gitty/blink_mod_menu/android-build-tools/apktool.jar}"
+APKTOOL="${APKTOOL:-/Users/a123/Projects/reverse/AI_Agent/blink_from_gitty/blink_mod_menu/android-build-tools/apktool.jar}"
 
 : "${ANDROID_JAR:?Set ANDROID_JAR to android.jar}"
 : "${D8:?Set D8 to the d8 executable}"
@@ -32,7 +32,7 @@ APKTOOL="${APKTOOL:-/Users/a123/Desktop/AI_Agent/blink_from_gitty/blink_mod_menu
 OUT="${OUT:-$ROOT/build}"
 rm -rf "$OUT/classes" "$OUT/java-dex" "$OUT/merged"
 mkdir -p "$OUT/classes" "$OUT/java-dex" "$OUT/bridge-project/smali/com/blinkmap/mod" "$OUT/merged"
-cp "$ROOT/src/main/smali/com/blinkmap/mod/WorkBridge.smali" "$OUT/bridge-project/smali/com/blinkmap/mod/"
+cp "$ROOT/src/main/smali/com/blinkmap/mod/"*.smali "$OUT/bridge-project/smali/com/blinkmap/mod/"
 cat > "$OUT/bridge-project/apktool.yml" <<YML
 version: 3.0.3
 apkFileName: bridge.apk
@@ -40,12 +40,12 @@ usesFramework:
   ids:
   - 1
 sdkInfo:
-  minSdkVersion: 32
+  minSdkVersion: 26
 doNotCompress:
 - dex
 YML
 cat > "$OUT/bridge-project/AndroidManifest.xml" <<XML
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.blinkmod"><uses-sdk android:minSdkVersion="32" /></manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.blinkmod"><uses-sdk android:minSdkVersion="26" /></manifest>
 XML
 if [ -n "${ECJ:-}" ] && [ -f "${ECJ:-}" ]; then
     java -jar "$ECJ" -source 1.8 -target 1.8 -cp "$ANDROID_JAR" -d "$OUT/classes" $(find "$ROOT/src/main/java" -name '*.java' | sort)
@@ -53,15 +53,15 @@ else
     JAVAC_BIN="${JAVAC:-/opt/homebrew/opt/openjdk@17/bin/javac}"
     "$JAVAC_BIN" --release 8 -cp "$ANDROID_JAR" -d "$OUT/classes" $(find "$ROOT/src/main/java" -name '*.java' | sort)
 fi
-"$D8" --lib "$ANDROID_JAR" --min-api 32 --output "$OUT/java-dex" $(find "$OUT/classes" -name '*.class' | sort)
+"$D8" --lib "$ANDROID_JAR" --min-api 26 --output "$OUT/java-dex" $(find "$OUT/classes" -name '*.class' | sort)
 java -jar "$APKTOOL" b "$OUT/bridge-project" -o "$OUT/bridge.apk"
 unzip -p "$OUT/bridge.apk" classes.dex > "$OUT/bridge.dex"
-"$D8" --lib "$ANDROID_JAR" --min-api 32 --output "$OUT/merged" "$OUT/java-dex/classes.dex" "$OUT/bridge.dex"
+"$D8" --lib "$ANDROID_JAR" --min-api 26 --output "$OUT/merged" "$OUT/java-dex/classes.dex" "$OUT/bridge.dex"
 cp "$OUT/merged/classes.dex" "$OUT/blinkmod-overlay.dex"
 echo "Built $OUT/blinkmod-overlay.dex"
 
 # Automatic sync into decompiled source for immediate packaging
-APK_SRC="/Users/a123/Desktop/AI_Agent/blink_from_gitty/blink_mod_menu/blinkmod_v1.1_src"
+APK_SRC="/Users/a123/Projects/reverse/AI_Agent/blink_apk_v1.36/decompiled"
 if [ -d "$APK_SRC" ]; then
     echo "==> Syncing compiled smali and assets to $APK_SRC..."
     SYNC_TMP="/tmp/overlay_sync_$$"
@@ -69,10 +69,12 @@ if [ -d "$APK_SRC" ]; then
     cp "$OUT/blinkmod-overlay.dex" "$SYNC_TMP/classes.dex"
     zip -q -j "$SYNC_TMP/overlay.apk" "$SYNC_TMP/classes.dex"
     java -jar "$APKTOOL" d "$SYNC_TMP/overlay.apk" -o "$SYNC_TMP/decoded" -f >/dev/null 2>&1
+    rm -rf "$APK_SRC/smali_classes9/com/blinkmap/mod"
+    mkdir -p "$APK_SRC/smali_classes9/com/blinkmap/mod"
     cp -r "$SYNC_TMP/decoded/smali/com/blinkmap/mod/"* "$APK_SRC/smali_classes9/com/blinkmap/mod/"
-    if [ -d "$ROOT/src/main/assets" ]; then
+    if [ -d "$ROOT/src/main/assets" ] && [ -n "$(ls -A "$ROOT/src/main/assets" 2>/dev/null)" ]; then
         cp "$ROOT/src/main/assets/"* "$APK_SRC/assets/"
     fi
     rm -rf "$SYNC_TMP"
-    echo "==> Smali and assets successfully synced to blinkmod_v1.1_src!"
+    echo "==> Smali and assets successfully synced to blink_apk_v1.36/decompiled!"
 fi
