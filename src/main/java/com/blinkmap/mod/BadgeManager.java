@@ -52,11 +52,11 @@ public class BadgeManager {
 
     static {
         // Safe offline defaults
-        BADGES.put("3266908271", "CEO, Founder, царь и бог");
-        BADGES.put("lonestill", "CEO, Founder, царь и бог");
+        BADGES.put("3266908271", "Создатель / Главный разработчик");
+        BADGES.put("lonestill", "Создатель / Главный разработчик");
         BADGES.put("824493128", "Главный тестер");
 
-        TEAM.add(new TeamMember("3266908271", "lonestill", "lonestill", "CEO, Founder, царь и бог"));
+        TEAM.add(new TeamMember("3266908271", "lonestill", "lonestill", "Создатель / Главный разработчик"));
         TEAM.add(new TeamMember("824493128", "", "Тестер", "Главный тестер"));
     }
 
