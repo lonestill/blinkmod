@@ -46,23 +46,44 @@ public class BadgeManager {
 
     private static Context appContext = null;
     private static final Map<String, String> BADGES = new ConcurrentHashMap<>();
-    private static final List<TeamMember> TEAM = new CopyOnWriteArrayList<>();
+    private static volatile TeamMember creator = new TeamMember("3266908271", "lonestill", "lonestill", "Создатель");
+    private static final List<TeamMember> HELPERS = new CopyOnWriteArrayList<>();
+    private static volatile String helpersTitle = "ПОМОЩНИКИ ПРОЕКТА";
+    private static volatile String helpersSubtitle = "Выражаем благодарность за помощь в разработке";
     private static final AtomicBoolean IS_FETCHING = new AtomicBoolean(false);
     private static long lastFetchTime = 0;
 
     static {
         // Safe offline defaults
-        BADGES.put("3266908271", "Создатель / Главный разработчик");
-        BADGES.put("lonestill", "Создатель / Главный разработчик");
+        BADGES.put("3266908271", "Создатель");
+        BADGES.put("lonestill", "Создатель");
         BADGES.put("824493128", "Главный тестер");
         BADGES.put("wadzim67", "Главный тестер");
 
-        TEAM.add(new TeamMember("3266908271", "lonestill", "lonestill", "Создатель / Главный разработчик"));
-        TEAM.add(new TeamMember("824493128", "wadzim67", "Wadzim", "Главный тестер"));
+        HELPERS.add(new TeamMember("824493128", "wadzim67", "Wadzim", "Главный тестер"));
+    }
+
+    public static TeamMember getCreator() {
+        return creator;
+    }
+
+    public static List<TeamMember> getHelpers() {
+        return Collections.unmodifiableList(HELPERS);
+    }
+
+    public static String getHelpersTitle() {
+        return helpersTitle;
+    }
+
+    public static String getHelpersSubtitle() {
+        return helpersSubtitle;
     }
 
     public static List<TeamMember> getTeam() {
-        return Collections.unmodifiableList(TEAM);
+        List<TeamMember> full = new ArrayList<>();
+        if (creator != null) full.add(creator);
+        full.addAll(HELPERS);
+        return Collections.unmodifiableList(full);
     }
 
     public static void init(Context context) {
@@ -140,7 +161,7 @@ public class BadgeManager {
                                     .putLong(KEY_LAST_FETCH, lastFetchTime)
                                     .apply();
                         }
-                        Log.i(TAG, "Badges refreshed from GitHub: " + BADGES.size() + " entries, team: " + TEAM.size());
+                        Log.i(TAG, "Badges refreshed from GitHub: " + BADGES.size() + " entries, helpers: " + HELPERS.size());
                     } else {
                         Log.w(TAG, "Failed to fetch badges, HTTP code: " + code);
                     }
@@ -162,7 +183,31 @@ public class BadgeManager {
 
             JSONObject root = new JSONObject(jsonStr);
 
-            // 1. Parse badges map
+            // 0. Parse creator
+            if (root.has("creator")) {
+                JSONObject cObj = root.optJSONObject("creator");
+                if (cObj != null) {
+                    String id = cObj.optString("id", "3266908271").trim();
+                    String username = cObj.optString("username", "lonestill").trim();
+                    String name = cObj.optString("name", "lonestill").trim();
+                    String role = cObj.optString("role", "Создатель").trim();
+                    creator = new TeamMember(id, username, name, role);
+                    if (!id.isEmpty()) BADGES.put(id, role);
+                    if (!username.isEmpty()) BADGES.put(username.toLowerCase(), role);
+                }
+            }
+
+            // 1. Parse helpers headers
+            if (root.has("helpers_title")) {
+                String t = root.optString("helpers_title", "").trim();
+                if (!t.isEmpty()) helpersTitle = t;
+            }
+            if (root.has("helpers_subtitle")) {
+                String s = root.optString("helpers_subtitle", "").trim();
+                if (!s.isEmpty()) helpersSubtitle = s;
+            }
+
+            // 2. Parse badges map
             JSONObject badgesObj = root.has("badges") ? root.optJSONObject("badges") : root;
             if (badgesObj != null) {
                 Iterator<String> keys = badgesObj.keys();
@@ -187,11 +232,33 @@ public class BadgeManager {
                 }
             }
 
-            // 2. Parse team array
-            if (root.has("team")) {
+            // 3. Parse helpers array
+            if (root.has("helpers")) {
+                JSONArray hArr = root.optJSONArray("helpers");
+                if (hArr != null) {
+                    List<TeamMember> newHelpers = new ArrayList<>();
+                    for (int i = 0; i < hArr.length(); i++) {
+                        JSONObject m = hArr.optJSONObject(i);
+                        if (m != null) {
+                            String id = m.optString("id", "").trim();
+                            String username = m.optString("username", "").trim();
+                            String name = m.optString("name", username.isEmpty() ? id : username).trim();
+                            String role = m.optString("role", "Главный тестер").trim();
+                            newHelpers.add(new TeamMember(id, username, name, role));
+                            if (!id.isEmpty()) BADGES.put(id, role);
+                            if (!username.isEmpty()) BADGES.put(username.toLowerCase(), role);
+                        }
+                    }
+                    if (!newHelpers.isEmpty()) {
+                        HELPERS.clear();
+                        HELPERS.addAll(newHelpers);
+                    }
+                }
+            } else if (root.has("team")) {
+                // Backward compatibility if old team array is present
                 JSONArray teamArr = root.optJSONArray("team");
                 if (teamArr != null && teamArr.length() > 0) {
-                    List<TeamMember> newTeam = new ArrayList<>();
+                    List<TeamMember> newHelpers = new ArrayList<>();
                     for (int i = 0; i < teamArr.length(); i++) {
                         JSONObject m = teamArr.optJSONObject(i);
                         if (m != null) {
@@ -199,14 +266,18 @@ public class BadgeManager {
                             String username = m.optString("username", "").trim();
                             String name = m.optString("name", username.isEmpty() ? id : username).trim();
                             String role = m.optString("role", "Команда").trim();
-                            newTeam.add(new TeamMember(id, username, name, role));
+                            if ("3266908271".equals(id) || "lonestill".equalsIgnoreCase(username)) {
+                                creator = new TeamMember(id, username, name, role);
+                            } else {
+                                newHelpers.add(new TeamMember(id, username, name, role));
+                            }
                             if (!id.isEmpty()) BADGES.put(id, role);
                             if (!username.isEmpty()) BADGES.put(username.toLowerCase(), role);
                         }
                     }
-                    if (!newTeam.isEmpty()) {
-                        TEAM.clear();
-                        TEAM.addAll(newTeam);
+                    if (!newHelpers.isEmpty()) {
+                        HELPERS.clear();
+                        HELPERS.addAll(newHelpers);
                     }
                 }
             }

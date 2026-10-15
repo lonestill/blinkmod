@@ -1133,18 +1133,34 @@ public final class ModSettingsActivity extends Activity {
         aboutCard.addView(tgBtn);
         container.addView(aboutCard, bottomMargin(14));
 
-        // --- Team & Credits Card ---
-        LinearLayout teamCard = card();
-        sectionTitle(teamCard, "КОМАНДА ПРОЕКТА");
-
-        java.util.List<BadgeManager.TeamMember> team = BadgeManager.getTeam();
-        for (int i = 0; i < team.size(); i++) {
-            teamCard.addView(teamMemberRow(team.get(i)));
-            if (i < team.size() - 1) {
-                teamCard.addView(line());
-            }
+        // --- Creator Card ---
+        BadgeManager.TeamMember creator = BadgeManager.getCreator();
+        if (creator != null) {
+            LinearLayout creatorCard = card();
+            sectionTitle(creatorCard, "СОЗДАТЕЛЬ");
+            creatorCard.addView(teamMemberRow(creator));
+            container.addView(creatorCard, bottomMargin(14));
         }
-        container.addView(teamCard, bottomMargin(14));
+
+        // --- Helpers & Credits Card ---
+        java.util.List<BadgeManager.TeamMember> helpers = BadgeManager.getHelpers();
+        if (helpers != null && !helpers.isEmpty()) {
+            LinearLayout helpersCard = card();
+            sectionTitle(helpersCard, BadgeManager.getHelpersTitle());
+            String sub = BadgeManager.getHelpersSubtitle();
+            if (sub != null && !sub.isEmpty()) {
+                TextView subTv = textSmall(sub);
+                subTv.setPadding(0, 0, 0, dp(12));
+                helpersCard.addView(subTv);
+            }
+            for (int i = 0; i < helpers.size(); i++) {
+                helpersCard.addView(teamMemberRow(helpers.get(i)));
+                if (i < helpers.size() - 1) {
+                    helpersCard.addView(line());
+                }
+            }
+            container.addView(helpersCard, bottomMargin(14));
+        }
     }
 
     // =========================================================================
