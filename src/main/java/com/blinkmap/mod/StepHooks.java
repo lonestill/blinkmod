@@ -378,12 +378,31 @@ public final class StepHooks {
         return app;
     }
 
-    public static void setHideCharge(boolean enabled) { hideCharge = enabled; }
+    public static void setHideCharge(boolean enabled) {
+        hideCharge = enabled;
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putBoolean("hide_charge", enabled).apply();
+    }
+
     public static void setForcedCharge(int charge) {
-        forcedCharge = charge < 0 ? -1 : Math.min(100, charge);
+        forcedCharge = charge < 0 ? -1 : Math.min(9999, charge);
         hideCharge = false;
         SharedPreferences p = prefs();
         if (p != null) p.edit().putInt("forced_charge", forcedCharge).putBoolean("hide_charge", false).apply();
+    }
+
+    public static Integer getOverriddenBattery(Integer original) {
+        if (hideCharge) {
+            chargeFilterHits++;
+            return null;
+        }
+        if (forcedCharge >= 0) {
+            chargeFilterHits++;
+            boolean isCharging = original != null && original.intValue() < 0;
+            int val = forcedCharge;
+            return Integer.valueOf(isCharging ? -val : val);
+        }
+        return original;
     }
     public static void setPauseLocation(boolean enabled) {
         pauseLocation = enabled;

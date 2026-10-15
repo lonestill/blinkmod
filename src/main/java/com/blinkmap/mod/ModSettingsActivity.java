@@ -38,15 +38,19 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.HorizontalScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.graphics.drawable.ColorDrawable;
 import android.text.Editable;
+import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.widget.EditText;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -738,6 +742,12 @@ public final class ModSettingsActivity extends Activity {
         geoCard.addView(coordsRow);
         geoCard.addView(line());
 
+        final LinearLayout favContainer = new LinearLayout(this);
+        favContainer.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams fcLp = new LinearLayout.LayoutParams(-1, -2);
+        fcLp.topMargin = dp(6);
+        favContainer.setLayoutParams(fcLp);
+
         final Runnable updateGeoHeader = new Runnable() {
             @Override
             public void run() {
@@ -745,6 +755,7 @@ public final class ModSettingsActivity extends Activity {
                 badgeModeText.setText(active ? "Фейк активен" : "Реальный GPS");
                 updateBadgeStyle(badgeModeText, active ? COLOR_SUCCESS : COLOR_ON_SURFACE_VARIANT);
                 coordsValText.setText(StepHooks.customCoordsText());
+                renderSavedLocations(favContainer, this);
             }
         };
 
@@ -813,6 +824,12 @@ public final class ModSettingsActivity extends Activity {
         quickBtns.addView(btnPin, createMarginedParams(dp(6)));
         quickBtns.addView(btnReset, createMarginedParams(dp(6)));
         geoCard.addView(quickBtns);
+
+        geoCard.addView(line());
+        TextView favLabel = textSmall("Избранные места и пресеты:");
+        geoCard.addView(favLabel);
+        renderSavedLocations(favContainer, updateGeoHeader);
+        geoCard.addView(favContainer);
 
         container.addView(geoCard, bottomMargin(14));
 
@@ -924,23 +941,37 @@ public final class ModSettingsActivity extends Activity {
         LinearLayout batteryCard = card();
         sectionTitle(batteryCard, "ЗАРЯД БАТАРЕИ");
 
+        HorizontalScrollView batScroll = new HorizontalScrollView(this);
+        batScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout.LayoutParams bsLp = new LinearLayout.LayoutParams(-1, -2);
+        bsLp.topMargin = dp(6);
+        batScroll.setLayoutParams(bsLp);
+
         final LinearLayout batPills = new LinearLayout(this);
         batPills.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams bpLp = new LinearLayout.LayoutParams(-1, -2);
-        bpLp.topMargin = dp(6);
-        batPills.setLayoutParams(bpLp);
+        batScroll.addView(batPills);
 
-        final int[] batVals = {-1, 100, 50, 1};
-        final String[] batNames = {"Реальный", "100%", "50%", "1%"};
+        final int[] batVals = {-1, 100, 1, 9999};
+        final String[] batNames = {"Реальный", "100%", "1%", "9999%"};
         int curCharge = StepHooks.forcedCharge;
         boolean hideCharge = StepHooks.hideCharge;
 
+        boolean isCustom = true;
+        for (int bVal : batVals) {
+            if (curCharge == bVal) {
+                isCustom = false;
+                break;
+            }
+        }
+
         final TextView[] batPillsList = new TextView[batVals.length];
+        final TextView[] customBatPillRef = new TextView[1];
+
         for (int i = 0; i < batVals.length; i++) {
             final int index = i;
             final int val = batVals[i];
             boolean selected = !hideCharge && (curCharge == val);
-            TextView pill = createPill(batNames[i], selected);
+            TextView pill = createScrollPill(batNames[i], selected);
             batPillsList[i] = pill;
             if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
             batPills.addView(pill);
@@ -953,13 +984,40 @@ public final class ModSettingsActivity extends Activity {
                     for (int j = 0; j < batPillsList.length; j++) {
                         updatePillStyle(batPillsList[j], j == index);
                     }
+                    if (customBatPillRef[0] != null) {
+                        customBatPillRef[0].setText("Свой %");
+                        updatePillStyle(customBatPillRef[0], false);
+                    }
                 }
             });
         }
 
+        String customBatLabel = (isCustom && curCharge > 0 && !hideCharge) ? (curCharge + "%") : "Свой %";
+        final TextView customBatPill = createScrollPill(customBatLabel, isCustom && !hideCharge && curCharge > 0);
+        customBatPillRef[0] = customBatPill;
+        ((LinearLayout.LayoutParams) customBatPill.getLayoutParams()).leftMargin = dp(6);
+        customBatPill.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                showCustomBatteryDialog(new Runnable() {
+                    @Override
+                    public void run() {
+                        int val = StepHooks.forcedCharge;
+                        for (TextView p : batPillsList) {
+                            updatePillStyle(p, false);
+                        }
+                        customBatPill.setText(val + "%");
+                        updatePillStyle(customBatPill, true);
+                    }
+                });
+            }
+        });
+        batPills.addView(customBatPill);
+
         batteryCard.addView(toggleRow("Скрыть заряд батареи",
                 "Передаёт значение заряда как null",
-                "hide_charge", false, new ToggleSwitchView.OnCheckedChangeListener() {
+                "hide_charge", hideCharge, new ToggleSwitchView.OnCheckedChangeListener() {
                     @Override
                     public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
                         StepHooks.setHideCharge(isChecked);
@@ -967,10 +1025,19 @@ public final class ModSettingsActivity extends Activity {
                             for (TextView p : batPillsList) {
                                 updatePillStyle(p, false);
                             }
+                            if (customBatPillRef[0] != null) {
+                                updatePillStyle(customBatPillRef[0], false);
+                            }
                         } else {
                             int charge = StepHooks.forcedCharge;
+                            boolean matched = false;
                             for (int j = 0; j < batVals.length; j++) {
-                                updatePillStyle(batPillsList[j], batVals[j] == charge);
+                                boolean sel = (batVals[j] == charge);
+                                updatePillStyle(batPillsList[j], sel);
+                                if (sel) matched = true;
+                            }
+                            if (customBatPillRef[0] != null) {
+                                updatePillStyle(customBatPillRef[0], !matched && charge > 0);
                             }
                         }
                     }
@@ -979,7 +1046,7 @@ public final class ModSettingsActivity extends Activity {
 
         TextView batLabel = textSmall("Фиксированный уровень:");
         batteryCard.addView(batLabel);
-        batteryCard.addView(batPills);
+        batteryCard.addView(batScroll);
         container.addView(batteryCard, bottomMargin(14));
 
         // --- Ghost Suite Card ---
@@ -1503,8 +1570,40 @@ public final class ModSettingsActivity extends Activity {
         return pill;
     }
 
+    private TextView createScrollPill(String text, boolean selected) {
+        TextView pill = new TextView(this);
+        pill.setText(text);
+        pill.setTextSize(13);
+        pill.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        pill.setGravity(Gravity.CENTER);
+        pill.setSingleLine(true);
+        pill.setTextColor(selected ? COLOR_ON_PRIMARY_CONTAINER : COLOR_ON_SURFACE_VARIANT);
+
+        GradientDrawable bg = new GradientDrawable();
+        if (selected) {
+            bg.setColor(COLOR_PRIMARY_CONTAINER);
+            bg.setStroke(dp(1), COLOR_PRIMARY);
+        } else {
+            bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+            bg.setStroke(dp(1), COLOR_OUTLINE);
+        }
+        bg.setCornerRadius(dp(19));
+        pill.setBackground(bg);
+        pill.setPadding(dp(16), 0, dp(16), 0);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(38));
+        pill.setLayoutParams(lp);
+        addTouchSpring(pill);
+        return pill;
+    }
+
     private void updatePillStyle(TextView pill, boolean selected) {
         if (pill == null) return;
+        int pl = pill.getPaddingLeft();
+        int pt = pill.getPaddingTop();
+        int pr = pill.getPaddingRight();
+        int pb = pill.getPaddingBottom();
         pill.setTextColor(selected ? COLOR_ON_PRIMARY_CONTAINER : COLOR_ON_SURFACE_VARIANT);
         GradientDrawable bg = new GradientDrawable();
         if (selected) {
@@ -1516,6 +1615,9 @@ public final class ModSettingsActivity extends Activity {
         }
         bg.setCornerRadius(dp(19));
         pill.setBackground(bg);
+        if (pl > 0 || pt > 0 || pr > 0 || pb > 0) {
+            pill.setPadding(pl, pt, pr, pb);
+        }
     }
 
     private void updateBadgeStyle(TextView b, int badgeColor) {
@@ -1887,6 +1989,336 @@ public final class ModSettingsActivity extends Activity {
                 } catch (Throwable e) {
                     Toast.makeText(ModSettingsActivity.this, "Введите корректное число", Toast.LENGTH_SHORT).show();
                 }
+            }
+        });
+
+        dialog.show();
+    }
+
+    public static class SavedLocation {
+        public final String name;
+        public final double lat;
+        public final double lon;
+
+        public SavedLocation(String name, double lat, double lon) {
+            this.name = name;
+            this.lat = lat;
+            this.lon = lon;
+        }
+    }
+
+    private List<SavedLocation> loadSavedLocations() {
+        List<SavedLocation> list = new ArrayList<>();
+        SharedPreferences sp = getSharedPreferences(PREFS, 0);
+        String raw = sp.getString("saved_locations_json", null);
+        if (raw == null || raw.isEmpty()) {
+            list.add(new SavedLocation("Москва", 55.7558, 37.6173));
+            list.add(new SavedLocation("Минск", 53.9006, 27.5590));
+            list.add(new SavedLocation("Питер", 59.9343, 30.3351));
+            list.add(new SavedLocation("Дубай", 25.2048, 55.2708));
+            list.add(new SavedLocation("Токио", 35.6762, 139.6503));
+            saveSavedLocations(list);
+            return list;
+        }
+        try {
+            JSONArray arr = new JSONArray(raw);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                list.add(new SavedLocation(obj.optString("name", "Точка"), obj.optDouble("lat", 0.0), obj.optDouble("lon", 0.0)));
+            }
+        } catch (Throwable ignored) {}
+        return list;
+    }
+
+    private void saveSavedLocations(List<SavedLocation> list) {
+        JSONArray arr = new JSONArray();
+        for (SavedLocation loc : list) {
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("name", loc.name);
+                obj.put("lat", loc.lat);
+                obj.put("lon", loc.lon);
+                arr.put(obj);
+            } catch (Throwable ignored) {}
+        }
+        getSharedPreferences(PREFS, 0).edit().putString("saved_locations_json", arr.toString()).apply();
+    }
+
+    private void renderSavedLocations(final LinearLayout container, final Runnable updateGeoHeader) {
+        container.removeAllViews();
+
+        final List<SavedLocation> list = loadSavedLocations();
+
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        scroll.addView(row);
+
+        // Add button pill "+"
+        TextView addBtn = createScrollPill("+ Добавить", false);
+        addBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                showAddLocationDialog(new Runnable() {
+                    @Override
+                    public void run() {
+                        renderSavedLocations(container, updateGeoHeader);
+                    }
+                });
+            }
+        });
+        row.addView(addBtn);
+
+        for (int i = 0; i < list.size(); i++) {
+            final SavedLocation loc = list.get(i);
+            final int index = i;
+            boolean isCurrent = false;
+            if (StepHooks.isSpoofingActive()) {
+                double dLat = Math.abs(StepHooks.customLat - loc.lat);
+                double dLon = Math.abs(StepHooks.customLon - loc.lon);
+                if (dLat < 0.001 && dLon < 0.001) isCurrent = true;
+            }
+            TextView pill = createScrollPill(loc.name, isCurrent);
+            ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    StepHooks.setCustomLocation(loc.lat, loc.lon);
+                    StepHooks.dispatchSyntheticLocation();
+                    Toast.makeText(ModSettingsActivity.this, "Телепорт: " + loc.name, Toast.LENGTH_SHORT).show();
+                    if (updateGeoHeader != null) updateGeoHeader.run();
+                    renderSavedLocations(container, updateGeoHeader);
+                }
+            });
+
+            pill.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View v) {
+                    haptic(v);
+                    new AlertDialog.Builder(ModSettingsActivity.this)
+                            .setTitle("Удалить место?")
+                            .setMessage("Удалить «" + loc.name + "» из избранного?")
+                            .setPositiveButton("Удалить", new android.content.DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(android.content.DialogInterface dialog, int which) {
+                                    list.remove(index);
+                                    saveSavedLocations(list);
+                                    renderSavedLocations(container, updateGeoHeader);
+                                }
+                            })
+                            .setNegativeButton("Отмена", null)
+                            .show();
+                    return true;
+                }
+            });
+
+            row.addView(pill);
+        }
+
+        container.addView(scroll);
+    }
+
+    private void showAddLocationDialog(final Runnable onAdded) {
+        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(22), dp(20), dp(22), dp(20));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        bg.setCornerRadius(dp(22));
+        bg.setStroke(dp(1), COLOR_OUTLINE);
+        layout.setBackground(bg);
+
+        TextView title = new TextView(this);
+        title.setText("Добавить место");
+        title.setTextSize(18);
+        title.setTextColor(COLOR_ON_SURFACE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        layout.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Название и координаты для быстрого телепорта:");
+        subtitle.setTextSize(13);
+        subtitle.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        subtitle.setPadding(0, dp(4), 0, dp(14));
+        layout.addView(subtitle);
+
+        final EditText nameInput = new EditText(this);
+        nameInput.setHint("Название (напр. Дом, Универ)");
+        nameInput.setHintTextColor(COLOR_ON_SURFACE_VARIANT);
+        nameInput.setTextColor(COLOR_ON_SURFACE);
+        nameInput.setTextSize(15);
+        nameInput.setPadding(dp(14), dp(10), dp(14), dp(10));
+        GradientDrawable inputBg1 = new GradientDrawable();
+        inputBg1.setColor(COLOR_SURFACE_CONTAINER);
+        inputBg1.setCornerRadius(dp(12));
+        inputBg1.setStroke(dp(1), COLOR_OUTLINE_VARIANT);
+        nameInput.setBackground(inputBg1);
+        layout.addView(nameInput);
+
+        double curLat = StepHooks.isSpoofingActive() ? StepHooks.customLat : 55.7558;
+        double curLon = StepHooks.isSpoofingActive() ? StepHooks.customLon : 37.6173;
+
+        final EditText coordsInput = new EditText(this);
+        coordsInput.setText(String.format(Locale.US, "%.6f, %.6f", curLat, curLon));
+        coordsInput.setTextColor(COLOR_ON_SURFACE);
+        coordsInput.setTextSize(14);
+        coordsInput.setPadding(dp(14), dp(10), dp(14), dp(10));
+        GradientDrawable inputBg2 = new GradientDrawable();
+        inputBg2.setColor(COLOR_SURFACE_CONTAINER);
+        inputBg2.setCornerRadius(dp(12));
+        inputBg2.setStroke(dp(1), COLOR_OUTLINE_VARIANT);
+        coordsInput.setBackground(inputBg2);
+        LinearLayout.LayoutParams cpLp = new LinearLayout.LayoutParams(-1, -2);
+        cpLp.topMargin = dp(8);
+        coordsInput.setLayoutParams(cpLp);
+        layout.addView(coordsInput);
+
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        buttons.setPadding(0, dp(18), 0, 0);
+
+        TextView cancelBtn = buttonOutlined("Отмена");
+        TextView okBtn = buttonPrimary("Сохранить");
+
+        buttons.addView(cancelBtn, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        LinearLayout.LayoutParams okLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
+        okLp.leftMargin = dp(8);
+        buttons.addView(okBtn, okLp);
+        layout.addView(buttons);
+
+        builder.setView(layout);
+        final AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        cancelBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                dialog.dismiss();
+            }
+        });
+
+        okBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                String name = nameInput.getText().toString().trim();
+                if (name.isEmpty()) name = "Моё место";
+                String cStr = coordsInput.getText().toString().trim();
+                String[] parts = cStr.split("[,;\\s]+");
+                double lat = 0.0, lon = 0.0;
+                try {
+                    if (parts.length >= 2) {
+                        lat = Double.parseDouble(parts[0]);
+                        lon = Double.parseDouble(parts[1]);
+                    }
+                } catch (Throwable ignored) {}
+                if (lat == 0.0 && lon == 0.0) {
+                    Toast.makeText(ModSettingsActivity.this, "Некорректные координаты", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                List<SavedLocation> list = loadSavedLocations();
+                list.add(new SavedLocation(name, lat, lon));
+                saveSavedLocations(list);
+                dialog.dismiss();
+                if (onAdded != null) onAdded.run();
+                Toast.makeText(ModSettingsActivity.this, "Место «" + name + "» сохранено!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        dialog.show();
+    }
+
+    private void showCustomBatteryDialog(final Runnable onApplied) {
+        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(22), dp(20), dp(22), dp(20));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        bg.setCornerRadius(dp(22));
+        bg.setStroke(dp(1), COLOR_OUTLINE);
+        layout.setBackground(bg);
+
+        TextView title = new TextView(this);
+        title.setText("Свой процент заряда");
+        title.setTextSize(18);
+        title.setTextColor(COLOR_ON_SURFACE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        layout.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Введите число от 0 до 9999% (например 777 или 9999):");
+        subtitle.setTextSize(13);
+        subtitle.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        subtitle.setPadding(0, dp(4), 0, dp(14));
+        layout.addView(subtitle);
+
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(4)});
+        int cur = StepHooks.forcedCharge;
+        input.setText(cur > 0 ? String.valueOf(cur) : "9999");
+        input.setTextColor(COLOR_ON_SURFACE);
+        input.setTextSize(17);
+        input.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        input.setPadding(dp(16), dp(12), dp(16), dp(12));
+        GradientDrawable inputBg = new GradientDrawable();
+        inputBg.setColor(COLOR_SURFACE_CONTAINER);
+        inputBg.setCornerRadius(dp(12));
+        inputBg.setStroke(dp(1), COLOR_OUTLINE_VARIANT);
+        input.setBackground(inputBg);
+        layout.addView(input);
+
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        buttons.setPadding(0, dp(18), 0, 0);
+
+        TextView cancelBtn = buttonOutlined("Отмена");
+        TextView okBtn = buttonPrimary("Применить");
+
+        buttons.addView(cancelBtn, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        LinearLayout.LayoutParams okLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
+        okLp.leftMargin = dp(8);
+        buttons.addView(okBtn, okLp);
+        layout.addView(buttons);
+
+        builder.setView(layout);
+        final AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        cancelBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                dialog.dismiss();
+            }
+        });
+
+        okBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                String str = input.getText().toString().trim();
+                int val = -1;
+                try {
+                    val = Integer.parseInt(str);
+                } catch (Throwable ignored) {}
+                if (val < 0) val = 0;
+                if (val > 9999) val = 9999;
+                StepHooks.setForcedCharge(val);
+                dialog.dismiss();
+                if (onApplied != null) onApplied.run();
+                Toast.makeText(ModSettingsActivity.this, "Заряд установлен: " + val + "%", Toast.LENGTH_SHORT).show();
             }
         });
 
