@@ -82,7 +82,25 @@ public final class StepHooks {
         return original;
     }
 
+    public static int forcedSpeed = -1; // -1 = real/drift, otherwise km/h
+    public static boolean forceCharging = false;
+
+    public static void setForcedSpeed(int speedKmH) {
+        forcedSpeed = speedKmH;
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putInt("forced_speed", forcedSpeed).apply();
+    }
+
+    public static void setForceCharging(boolean enabled) {
+        forceCharging = enabled;
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putBoolean("force_charging", enabled).apply();
+    }
+
     public static float getDriftSpeed(float original) {
+        if (forcedSpeed >= 0) {
+            return forcedSpeed / 3.6f;
+        }
         if (customLat != 0.0 || driftCurLat != 0.0) {
             return driftSpeed > 0 ? driftSpeed : 1.25f;
         }
@@ -320,6 +338,10 @@ public final class StepHooks {
             SharedPreferences p = prefs();
             hideCharge = p != null && p.getBoolean("hide_charge", false);
             forcedCharge = p == null ? -1 : p.getInt("forced_charge", -1);
+            forceCharging = p != null && p.getBoolean("force_charging", false);
+            forcedSpeed = p == null ? -1 : p.getInt("forced_speed", -1);
+            ghostTypingActive = p != null && p.getBoolean("ghost_typing_active", true);
+            activeAuthToken = p == null ? null : p.getString("active_auth_token", null);
             pauseLocation = p != null && p.getBoolean("pause_location", false);
             pauseUntil = p == null ? 0L : p.getLong("pause_until", 0L);
             geoIntervalMs = p == null ? 0L : p.getInt("geo_interval_minutes", 0) * 60000L;
@@ -398,7 +420,7 @@ public final class StepHooks {
         }
         if (forcedCharge >= 0) {
             chargeFilterHits++;
-            boolean isCharging = original != null && original.intValue() < 0;
+            boolean isCharging = forceCharging || (original != null && original.intValue() < 0);
             int val = forcedCharge;
             return Integer.valueOf(isCharging ? -val : val);
         }
@@ -713,6 +735,37 @@ public final class StepHooks {
         antiSpoofShieldActive = active;
         SharedPreferences p = prefs();
         if (p != null) p.edit().putBoolean("anti_spoof_shield", active).apply();
+    }
+
+    public static volatile boolean ghostTypingActive = true;
+
+    public static boolean isGhostTypingActive() {
+        SharedPreferences p = prefs();
+        return p != null ? p.getBoolean("ghost_typing_active", true) : ghostTypingActive;
+    }
+
+    public static void setGhostTypingActive(boolean active) {
+        ghostTypingActive = active;
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putBoolean("ghost_typing_active", active).apply();
+    }
+
+    public static volatile String activeAuthToken = null;
+
+    public static void onAuthTokenCaptured(String token) {
+        if (token != null && !token.isEmpty() && !token.equals(activeAuthToken)) {
+            activeAuthToken = token;
+            SharedPreferences p = prefs();
+            if (p != null) p.edit().putString("active_auth_token", token).apply();
+        }
+    }
+
+    public static String getAuthToken() {
+        if (activeAuthToken != null && !activeAuthToken.isEmpty()) {
+            return activeAuthToken;
+        }
+        SharedPreferences p = prefs();
+        return p == null ? null : p.getString("active_auth_token", null);
     }
 
     public static void toast(final String message) {

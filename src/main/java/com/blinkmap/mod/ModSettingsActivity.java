@@ -720,6 +720,56 @@ public final class ModSettingsActivity extends Activity {
 
         stepsCard.addView(multiplierSelector("Множитель отправки", "network_steps_multiplier", new int[]{1, 2, 5, 10}));
         container.addView(stepsCard, bottomMargin(14));
+
+        // --- Auto-Achievements Card ---
+        LinearLayout achCard = card();
+        sectionTitle(achCard, "ДОСТИЖЕНИЯ (AUTO-ACHIEVEMENTS)");
+        TextView achDesc = textSmall("Автоматически сканирует 60+ категорий мест (церкви, театры, бары, аэропорты) через OSM и отправляет чекины для открытия мировых ачивок в 1 клик.");
+        achCard.addView(achDesc);
+
+        final View achStatusRow = statusInfoRow("Статус фарма", AchievementFarmer.isFarmingRunning() ? "Выполняется..." : "Готов к запуску");
+        final TextView achStatusVal = (TextView) ((LinearLayout) achStatusRow).getChildAt(1);
+        achCard.addView(achStatusRow);
+
+        final TextView farmBtn = buttonPrimary("Открыть все достижения в 1 клик");
+        farmBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                haptic(v);
+                if (AchievementFarmer.isFarmingRunning()) {
+                    Toast.makeText(ModSettingsActivity.this, "Фарм уже идёт в фоне...", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                farmBtn.setEnabled(false);
+                farmBtn.setText("Фармим ачивки...");
+                achStatusVal.setText("Запуск сканирования...");
+                AchievementFarmer.startFarming(getApplicationContext(), new AchievementFarmer.FarmingListener() {
+                    @Override
+                    public void onProgress(final int current, final int total, final String category, final String placeName) {
+                        achStatusVal.setText("[" + current + "/" + total + "] " + category);
+                        farmBtn.setText("Чекин: " + current + "/" + total);
+                    }
+
+                    @Override
+                    public void onDone(final int successCount, final int total) {
+                        farmBtn.setEnabled(true);
+                        farmBtn.setText("Открыть все достижения в 1 клик");
+                        achStatusVal.setText("Готово! Отправлено: " + successCount + "/" + total);
+                        Toast.makeText(ModSettingsActivity.this, "Фарм завершён: " + successCount + " чекинов отправлено!", Toast.LENGTH_LONG).show();
+                    }
+
+                    @Override
+                    public void onError(final String message) {
+                        farmBtn.setEnabled(true);
+                        farmBtn.setText("Открыть все достижения в 1 клик");
+                        achStatusVal.setText("Ошибка");
+                        Toast.makeText(ModSettingsActivity.this, message, Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        });
+        achCard.addView(farmBtn);
+        container.addView(achCard, bottomMargin(14));
     }
 
     // =========================================================================
@@ -874,6 +924,87 @@ public final class ModSettingsActivity extends Activity {
         }
         driftCard.addView(driftPills);
         container.addView(driftCard, bottomMargin(14));
+
+        // --- Speed Spoofer Card ---
+        LinearLayout speedCard = card();
+        sectionTitle(speedCard, "СКОРОСТЬ ПЕРЕМЕЩЕНИЯ (SPEED SPOOFER)");
+        TextView speedDesc = textSmall("Отображается на спидометре вашего аватара на карте у друзей.");
+        speedCard.addView(speedDesc);
+
+        HorizontalScrollView speedScroll = new HorizontalScrollView(this);
+        speedScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout.LayoutParams ssLp = new LinearLayout.LayoutParams(-1, -2);
+        ssLp.topMargin = dp(6);
+        speedScroll.setLayoutParams(ssLp);
+
+        final LinearLayout speedPills = new LinearLayout(this);
+        speedPills.setOrientation(LinearLayout.HORIZONTAL);
+        speedScroll.addView(speedPills);
+
+        final int[] speedVals = {-1, 60, 140, 300, 900};
+        final String[] speedNames = {"Реальная", "60 км/ч", "140 км/ч", "300 км/ч", "900 км/ч"};
+        int curSpeed = StepHooks.forcedSpeed;
+
+        boolean isCustomSpeed = true;
+        for (int sv : speedVals) {
+            if (curSpeed == sv) {
+                isCustomSpeed = false;
+                break;
+            }
+        }
+
+        final TextView[] speedPillsList = new TextView[speedVals.length];
+        final TextView[] customSpeedPillRef = new TextView[1];
+
+        for (int i = 0; i < speedVals.length; i++) {
+            final int index = i;
+            final int val = speedVals[i];
+            boolean selected = (curSpeed == val);
+            TextView pill = createScrollPill(speedNames[i], selected);
+            speedPillsList[i] = pill;
+            if (i > 0) ((LinearLayout.LayoutParams) pill.getLayoutParams()).leftMargin = dp(6);
+            speedPills.addView(pill);
+
+            pill.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    haptic(v);
+                    StepHooks.setForcedSpeed(val);
+                    for (int j = 0; j < speedPillsList.length; j++) {
+                        updatePillStyle(speedPillsList[j], j == index);
+                    }
+                    if (customSpeedPillRef[0] != null) {
+                        customSpeedPillRef[0].setText("Своя");
+                        updatePillStyle(customSpeedPillRef[0], false);
+                    }
+                }
+            });
+        }
+
+        String customSpeedLabel = (isCustomSpeed && curSpeed > 0) ? (curSpeed + " км/ч") : "Своя";
+        final TextView customSpeedPill = createScrollPill(customSpeedLabel, isCustomSpeed && curSpeed > 0);
+        customSpeedPillRef[0] = customSpeedPill;
+        ((LinearLayout.LayoutParams) customSpeedPill.getLayoutParams()).leftMargin = dp(6);
+        customSpeedPill.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                showCustomSpeedDialog(new Runnable() {
+                    @Override
+                    public void run() {
+                        int val = StepHooks.forcedSpeed;
+                        for (TextView p : speedPillsList) {
+                            updatePillStyle(p, false);
+                        }
+                        customSpeedPill.setText(val + " км/ч");
+                        updatePillStyle(customSpeedPill, true);
+                    }
+                });
+            }
+        });
+        speedPills.addView(customSpeedPill);
+        speedCard.addView(speedScroll);
+        container.addView(speedCard, bottomMargin(14));
 
         // --- Freeze / Pause Card ---
         LinearLayout pauseCard = card();
@@ -1047,6 +1178,15 @@ public final class ModSettingsActivity extends Activity {
         TextView batLabel = textSmall("Фиксированный уровень:");
         batteryCard.addView(batLabel);
         batteryCard.addView(batScroll);
+        batteryCard.addView(line());
+        batteryCard.addView(toggleRow("Всегда показывать зарядку ⚡",
+                "Отображает иконку молнии на аватаре у друзей, даже без провода",
+                "force_charging", StepHooks.forceCharging, new ToggleSwitchView.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                        StepHooks.setForceCharging(isChecked);
+                    }
+                }));
         container.addView(batteryCard, bottomMargin(14));
 
         // --- Ghost Suite Card ---
@@ -1059,6 +1199,16 @@ public final class ModSettingsActivity extends Activity {
                     @Override
                     public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
                         StepHooks.setGhostVoiceActive(isChecked);
+                    }
+                }));
+        ghostCard.addView(line());
+
+        ghostCard.addView(toggleRow("Стелс набора текста (Ghost Typing)",
+                "Не отправлять собеседнику статус «печатает...» в чатах",
+                "ghost_typing_active", StepHooks.isGhostTypingActive(), new ToggleSwitchView.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(ToggleSwitchView view, boolean isChecked) {
+                        StepHooks.setGhostTypingActive(isChecked);
                     }
                 }));
         ghostCard.addView(line());
@@ -2319,6 +2469,95 @@ public final class ModSettingsActivity extends Activity {
                 dialog.dismiss();
                 if (onApplied != null) onApplied.run();
                 Toast.makeText(ModSettingsActivity.this, "Заряд установлен: " + val + "%", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        dialog.show();
+    }
+
+    private void showCustomSpeedDialog(final Runnable onApplied) {
+        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(22), dp(20), dp(22), dp(20));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        bg.setCornerRadius(dp(22));
+        bg.setStroke(dp(1), COLOR_OUTLINE);
+        layout.setBackground(bg);
+
+        TextView title = new TextView(this);
+        title.setText("Своя скорость (км/ч)");
+        title.setTextSize(18);
+        title.setTextColor(COLOR_ON_SURFACE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        layout.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Введите скорость от 0 до 9999 км/ч (например 120, 300 или 900):");
+        subtitle.setTextSize(13);
+        subtitle.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        subtitle.setPadding(0, dp(4), 0, dp(14));
+        layout.addView(subtitle);
+
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(4)});
+        int cur = StepHooks.forcedSpeed;
+        input.setText(cur > 0 ? String.valueOf(cur) : "120");
+        input.setTextColor(COLOR_ON_SURFACE);
+        input.setTextSize(17);
+        input.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        input.setPadding(dp(16), dp(12), dp(16), dp(12));
+        GradientDrawable inputBg = new GradientDrawable();
+        inputBg.setColor(COLOR_SURFACE_CONTAINER);
+        inputBg.setCornerRadius(dp(12));
+        inputBg.setStroke(dp(1), COLOR_OUTLINE_VARIANT);
+        input.setBackground(inputBg);
+        layout.addView(input);
+
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        buttons.setPadding(0, dp(18), 0, 0);
+
+        TextView cancelBtn = buttonOutlined("Отмена");
+        TextView okBtn = buttonPrimary("Применить");
+
+        buttons.addView(cancelBtn, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        LinearLayout.LayoutParams okLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
+        okLp.leftMargin = dp(8);
+        buttons.addView(okBtn, okLp);
+        layout.addView(buttons);
+
+        builder.setView(layout);
+        final AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        cancelBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                dialog.dismiss();
+            }
+        });
+
+        okBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                String str = input.getText().toString().trim();
+                int val = -1;
+                try {
+                    val = Integer.parseInt(str);
+                } catch (Throwable ignored) {}
+                if (val < 0) val = 0;
+                if (val > 9999) val = 9999;
+                StepHooks.setForcedSpeed(val);
+                dialog.dismiss();
+                if (onApplied != null) onApplied.run();
+                Toast.makeText(ModSettingsActivity.this, "Скорость установлена: " + val + " км/ч", Toast.LENGTH_SHORT).show();
             }
         });
 
