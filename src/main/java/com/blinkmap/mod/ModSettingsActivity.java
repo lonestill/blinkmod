@@ -1139,12 +1139,7 @@ public final class ModSettingsActivity extends Activity {
 
         java.util.List<BadgeManager.TeamMember> team = BadgeManager.getTeam();
         for (int i = 0; i < team.size(); i++) {
-            BadgeManager.TeamMember m = team.get(i);
-            String title = m.name != null && !m.name.isEmpty() ? m.name : ("ID " + m.id);
-            if (m.username != null && !m.username.isEmpty() && !title.contains(m.username)) {
-                title += " (@" + m.username + ")";
-            }
-            teamCard.addView(copyRow(title, m.role, "Скопировано"));
+            teamCard.addView(teamMemberRow(team.get(i)));
             if (i < team.size() - 1) {
                 teamCard.addView(line());
             }
@@ -1564,6 +1559,94 @@ public final class ModSettingsActivity extends Activity {
         }
         b.setBackground(bg);
         row.addView(b, new LinearLayout.LayoutParams(-2, -2));
+        return row;
+    }
+
+    private void openBlinkProfile(BadgeManager.TeamMember m) {
+        if (m == null) return;
+        try {
+            Intent intent = null;
+            if (m.id != null && !m.id.isEmpty() && !"0".equals(m.id)) {
+                intent = new Intent(Intent.ACTION_VIEW, Uri.parse("blink:///profile/?id=" + m.id));
+            } else if (m.username != null && !m.username.isEmpty()) {
+                intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://blinkmap.com/@" + m.username));
+            }
+            if (intent != null) {
+                intent.setPackage(getPackageName());
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                return;
+            }
+        } catch (Throwable t) {
+            try {
+                Intent fallback = new Intent(Intent.ACTION_VIEW, Uri.parse("blink:///profile/?id=" + m.id));
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(fallback);
+                return;
+            } catch (Throwable ignored) {}
+        }
+        Toast.makeText(this, "Не удалось открыть профиль", Toast.LENGTH_SHORT).show();
+    }
+
+    private View teamMemberRow(final BadgeManager.TeamMember m) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(10), 0, dp(10));
+
+        LinearLayout infoCol = new LinearLayout(this);
+        infoCol.setOrientation(LinearLayout.VERTICAL);
+
+        String mainName = (m.name != null && !m.name.isEmpty()) ? m.name : ("ID " + m.id);
+        TextView nameView = new TextView(this);
+        nameView.setText(mainName);
+        nameView.setTextSize(14);
+        nameView.setTextColor(COLOR_ON_SURFACE);
+        nameView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        infoCol.addView(nameView);
+
+        String sub = "";
+        if (m.username != null && !m.username.isEmpty()) {
+            sub = "@" + m.username + " • ";
+        }
+        sub += "ID: " + m.id;
+
+        TextView subView = new TextView(this);
+        subView.setText(sub);
+        subView.setTextSize(11);
+        subView.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        infoCol.addView(subView);
+
+        row.addView(infoCol, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView badgeView = new TextView(this);
+        badgeView.setText(m.role);
+        badgeView.setTextSize(11);
+        badgeView.setTextColor(COLOR_PRIMARY);
+        badgeView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        badgeView.setPadding(dp(10), dp(4), dp(10), dp(4));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(COLOR_SURFACE_CONTAINER_HIGH);
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), COLOR_OUTLINE);
+        badgeView.setBackground(bg);
+        row.addView(badgeView);
+
+        TextView arrow = new TextView(this);
+        arrow.setText(" ›");
+        arrow.setTextSize(16);
+        arrow.setTextColor(COLOR_ON_SURFACE_VARIANT);
+        arrow.setPadding(dp(4), 0, 0, 0);
+        row.addView(arrow);
+
+        row.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                haptic(v);
+                openBlinkProfile(m);
+            }
+        });
+        addTouchSpring(row);
         return row;
     }
 
