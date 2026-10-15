@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -12,9 +13,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BadgeManager {
@@ -25,15 +30,38 @@ public class BadgeManager {
     private static final String KEY_LAST_FETCH = "badges_last_fetch";
     private static final long CACHE_TTL_MS = 30 * 1000; // 30 seconds for quick updates
 
+    public static class TeamMember {
+        public final String id;
+        public final String username;
+        public final String name;
+        public final String role;
+
+        public TeamMember(String id, String username, String name, String role) {
+            this.id = id;
+            this.username = username;
+            this.name = name;
+            this.role = role;
+        }
+    }
+
     private static Context appContext = null;
     private static final Map<String, String> BADGES = new ConcurrentHashMap<>();
+    private static final List<TeamMember> TEAM = new CopyOnWriteArrayList<>();
     private static final AtomicBoolean IS_FETCHING = new AtomicBoolean(false);
     private static long lastFetchTime = 0;
 
     static {
-        // Safe offline default
-        BADGES.put("3266908271", "mod developer");
-        BADGES.put("lonestill", "mod developer");
+        // Safe offline defaults
+        BADGES.put("3266908271", "CEO, Founder, царь и бог");
+        BADGES.put("lonestill", "CEO, Founder, царь и бог");
+        BADGES.put("824493128", "Главный тестер");
+
+        TEAM.add(new TeamMember("3266908271", "lonestill", "lonestill", "CEO, Founder, царь и бог"));
+        TEAM.add(new TeamMember("824493128", "", "Тестер", "Главный тестер"));
+    }
+
+    public static List<TeamMember> getTeam() {
+        return Collections.unmodifiableList(TEAM);
     }
 
     public static void init(Context context) {
@@ -111,7 +139,7 @@ public class BadgeManager {
                                     .putLong(KEY_LAST_FETCH, lastFetchTime)
                                     .apply();
                         }
-                        Log.i(TAG, "Badges refreshed from GitHub: " + BADGES.size() + " entries");
+                        Log.i(TAG, "Badges refreshed from GitHub: " + BADGES.size() + " entries, team: " + TEAM.size());
                     } else {
                         Log.w(TAG, "Failed to fetch badges, HTTP code: " + code);
                     }
@@ -132,27 +160,53 @@ public class BadgeManager {
             jsonStr = jsonStr.replaceAll(",\\s*([\\}\\]])", "$1");
 
             JSONObject root = new JSONObject(jsonStr);
-            JSONObject badgesObj = root.has("badges") ? root.optJSONObject("badges") : root;
-            if (badgesObj == null) return;
 
-            Iterator<String> keys = badgesObj.keys();
-            while (keys.hasNext()) {
-                String key = keys.next();
-                Object val = badgesObj.get(key);
-                String badgeText = null;
-                if (val instanceof String) {
-                    badgeText = (String) val;
-                } else if (val instanceof JSONObject) {
-                    JSONObject obj = (JSONObject) val;
-                    if (obj.has("badge")) badgeText = obj.optString("badge");
-                    else if (obj.has("title")) badgeText = obj.optString("title");
-                    else if (obj.has("text")) badgeText = obj.optString("text");
-                    else if (obj.has("name")) badgeText = obj.optString("name");
+            // 1. Parse badges map
+            JSONObject badgesObj = root.has("badges") ? root.optJSONObject("badges") : root;
+            if (badgesObj != null) {
+                Iterator<String> keys = badgesObj.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    Object val = badgesObj.get(key);
+                    String badgeText = null;
+                    if (val instanceof String) {
+                        badgeText = (String) val;
+                    } else if (val instanceof JSONObject) {
+                        JSONObject obj = (JSONObject) val;
+                        if (obj.has("badge")) badgeText = obj.optString("badge");
+                        else if (obj.has("title")) badgeText = obj.optString("title");
+                        else if (obj.has("text")) badgeText = obj.optString("text");
+                        else if (obj.has("name")) badgeText = obj.optString("name");
+                    }
+                    if (badgeText != null && badgeText.length() > 0) {
+                        String cleanKey = key.trim();
+                        BADGES.put(cleanKey, badgeText);
+                        BADGES.put(cleanKey.toLowerCase(), badgeText);
+                    }
                 }
-                if (badgeText != null && badgeText.length() > 0) {
-                    String cleanKey = key.trim();
-                    BADGES.put(cleanKey, badgeText);
-                    BADGES.put(cleanKey.toLowerCase(), badgeText);
+            }
+
+            // 2. Parse team array
+            if (root.has("team")) {
+                JSONArray teamArr = root.optJSONArray("team");
+                if (teamArr != null && teamArr.length() > 0) {
+                    List<TeamMember> newTeam = new ArrayList<>();
+                    for (int i = 0; i < teamArr.length(); i++) {
+                        JSONObject m = teamArr.optJSONObject(i);
+                        if (m != null) {
+                            String id = m.optString("id", "").trim();
+                            String username = m.optString("username", "").trim();
+                            String name = m.optString("name", username.isEmpty() ? id : username).trim();
+                            String role = m.optString("role", "Команда").trim();
+                            newTeam.add(new TeamMember(id, username, name, role));
+                            if (!id.isEmpty()) BADGES.put(id, role);
+                            if (!username.isEmpty()) BADGES.put(username.toLowerCase(), role);
+                        }
+                    }
+                    if (!newTeam.isEmpty()) {
+                        TEAM.clear();
+                        TEAM.addAll(newTeam);
+                    }
                 }
             }
         } catch (Throwable t) {

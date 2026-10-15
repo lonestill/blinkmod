@@ -1131,8 +1131,25 @@ public final class ModSettingsActivity extends Activity {
             }
         });
         aboutCard.addView(tgBtn);
-
         container.addView(aboutCard, bottomMargin(14));
+
+        // --- Team & Credits Card ---
+        LinearLayout teamCard = card();
+        sectionTitle(teamCard, "КОМАНДА ПРОЕКТА");
+
+        java.util.List<BadgeManager.TeamMember> team = BadgeManager.getTeam();
+        for (int i = 0; i < team.size(); i++) {
+            BadgeManager.TeamMember m = team.get(i);
+            String title = m.name != null && !m.name.isEmpty() ? m.name : ("ID " + m.id);
+            if (m.username != null && !m.username.isEmpty() && !title.contains(m.username)) {
+                title += " (@" + m.username + ")";
+            }
+            teamCard.addView(copyRow(title, m.role, "Скопировано"));
+            if (i < team.size() - 1) {
+                teamCard.addView(line());
+            }
+        }
+        container.addView(teamCard, bottomMargin(14));
     }
 
     // =========================================================================
